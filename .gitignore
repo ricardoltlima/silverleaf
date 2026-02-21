@@ -16,6 +16,8 @@ build/
 bin/
 !**/src/main/**/bin/
 !**/src/test/**/bin/
+!infra/aws-cdk/bin/
+!infra/aws-cdk/bin/**
 
 ### IntelliJ IDEA ###
 .idea
