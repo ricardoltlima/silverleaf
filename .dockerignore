@@ -2,7 +2,6 @@
 .github
 .gradle
 .idea
-build
 infra/aws-cdk/node_modules
 infra/aws-cdk/cdk.out
 uploads
