@@ -1,0 +1,10 @@
+.git
+.github
+.gradle
+.idea
+build
+infra/aws-cdk/node_modules
+infra/aws-cdk/cdk.out
+uploads
+*.iml
+**/.DS_Store

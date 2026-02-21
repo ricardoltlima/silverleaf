@@ -1,0 +1,862 @@
+﻿{
+  "info": {
+    "_postman_id": "f7408e0f-7d16-4f9c-b4d3-6d26f0c4b7d2",
+    "name": "Silverleaf API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Collection for testing Silverleaf auth and user endpoints."
+  },
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/actuator/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "actuator",
+            "health"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Health endpoint returns 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth - Register",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const existingEmail = pm.collectionVariables.get('email');",
+              "if (!existingEmail || existingEmail.includes('replace-me')) {",
+              "    const unique = Date.now();",
+              "    pm.collectionVariables.set('email', `resident.${unique}@example.com`);",
+              "}",
+              "if (!pm.collectionVariables.get('fullName')) {",
+              "    pm.collectionVariables.set('fullName', 'Test Resident');",
+              "}",
+              "if (!pm.collectionVariables.get('password')) {",
+              "    pm.collectionVariables.set('password', 'Passw0rd!');",
+              "}"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Register returns 201', function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('Register returns tokens', function () {",
+              "    pm.expect(json.accessToken).to.be.a('string').and.not.empty;",
+              "    pm.expect(json.refreshToken).to.be.a('string').and.not.empty;",
+              "});",
+              "pm.collectionVariables.set('accessToken', json.accessToken);",
+              "pm.collectionVariables.set('refreshToken', json.refreshToken);",
+              "pm.collectionVariables.set('accessTokenExpiresAt', json.accessTokenExpiresAt);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"{{fullName}}\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/auth/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "auth",
+            "register"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Auth - Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Login returns 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('Login returns tokens', function () {",
+              "    pm.expect(json.accessToken).to.be.a('string').and.not.empty;",
+              "    pm.expect(json.refreshToken).to.be.a('string').and.not.empty;",
+              "});",
+              "pm.collectionVariables.set('accessToken', json.accessToken);",
+              "pm.collectionVariables.set('refreshToken', json.refreshToken);",
+              "pm.collectionVariables.set('accessTokenExpiresAt', json.accessTokenExpiresAt);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "auth",
+            "login"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Users - Me",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('/me returns 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('/me includes user email and role', function () {",
+              "    pm.expect(json.email).to.be.a('string').and.not.empty;",
+              "    pm.expect(json.role).to.be.a('string').and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "me"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Auth - Refresh",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Refresh returns 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('Refresh returns new tokens', function () {",
+              "    pm.expect(json.accessToken).to.be.a('string').and.not.empty;",
+              "    pm.expect(json.refreshToken).to.be.a('string').and.not.empty;",
+              "});",
+              "pm.collectionVariables.set('accessToken', json.accessToken);",
+              "pm.collectionVariables.set('refreshToken', json.refreshToken);",
+              "pm.collectionVariables.set('accessTokenExpiresAt', json.accessTokenExpiresAt);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/auth/refresh",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "auth",
+            "refresh"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Users - Me (After Refresh)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "me"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Residents - List (Admin)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminAccessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/residents?page={{residentsPage}}&size={{residentsSize}}&q={{residentsQuery}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "residents"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "{{residentsPage}}"
+            },
+            {
+              "key": "size",
+              "value": "{{residentsSize}}"
+            },
+            {
+              "key": "q",
+              "value": "{{residentsQuery}}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Residents - Create (Admin)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminAccessToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"{{residentFullName}}\",\n  \"email\": \"{{residentEmail}}\",\n  \"password\": \"{{residentPassword}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/residents",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "residents"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Residents - Get By Id (Admin)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminAccessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/residents/{{residentId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "residents",
+            "{{residentId}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Residents - Update (Admin)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminAccessToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"{{residentFullName}}\",\n  \"email\": \"{{residentEmail}}\",\n  \"password\": \"{{residentPassword}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/residents/{{residentId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "residents",
+            "{{residentId}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Residents - Deactivate (Admin)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminAccessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/residents/{{residentId}}/deactivate",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "residents",
+            "{{residentId}}",
+            "deactivate"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Residents - Activate (Admin)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminAccessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/residents/{{residentId}}/activate",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "residents",
+            "{{residentId}}",
+            "activate"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Houses - List (Admin)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminAccessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/houses",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "houses"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Houses - Create (Admin)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Create house returns 201', function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "const json = pm.response.json();",
+              "pm.collectionVariables.set('houseId', String(json.id));",
+              "pm.collectionVariables.set('houseQrToken', json.qrToken);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminAccessToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"address\": \"{{houseAddress}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/houses",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "houses"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Onboarding - Get House By QR (Public)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/public/onboarding/houses/{{houseQrToken}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "public",
+            "onboarding",
+            "houses",
+            "{{houseQrToken}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Onboarding - List Pending Houses (Public)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/public/onboarding/houses/pending",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "public",
+            "onboarding",
+            "houses",
+            "pending"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Onboarding - Start (Public)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Start onboarding returns 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "const json = pm.response.json();",
+              "pm.collectionVariables.set('onboardingSessionToken', json.sessionToken);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"houseId\": {{houseId}}\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/public/onboarding/start",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "public",
+            "onboarding",
+            "start"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Onboarding - Request Contact Verification (Public)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Contact verification request returns 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "const json = pm.response.json();",
+              "pm.collectionVariables.set('onboardingVerificationToken', json.verificationToken);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sessionToken\": \"{{onboardingSessionToken}}\",\n  \"contactType\": \"EMAIL\",\n  \"contactValue\": \"{{houseResidentEmail}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/public/onboarding/contact",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "public",
+            "onboarding",
+            "contact"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Onboarding - Verify Contact (Public)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/public/onboarding/verify/{{onboardingVerificationToken}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "public",
+            "onboarding",
+            "verify",
+            "{{onboardingVerificationToken}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Onboarding - Complete (Public)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sessionToken\": \"{{onboardingSessionToken}}\",\n  \"provider\": \"google\",\n  \"providerSubject\": \"google-subject-001\",\n  \"fullName\": \"{{houseResidentName}}\",\n  \"email\": \"{{houseResidentEmail}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/public/onboarding/complete",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "public",
+            "onboarding",
+            "complete"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Feed - List",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/feed?limit={{feedLimit}}&cursor={{feedCursor}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "feed"
+          ],
+          "query": [
+            {
+              "key": "limit",
+              "value": "{{feedLimit}}"
+            },
+            {
+              "key": "cursor",
+              "value": "{{feedCursor}}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Feed - Create Post",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"{{feedText}}\",\n  \"media\": [\n    {\n      \"type\": \"IMAGE\",\n      \"url\": \"{{feedMediaUrl}}\"\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/feed/posts",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "feed",
+            "posts"
+          ]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "fullName",
+      "value": "Test Resident"
+    },
+    {
+      "key": "email",
+      "value": "replace-me@example.com"
+    },
+    {
+      "key": "password",
+      "value": "Passw0rd!"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "adminAccessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "accessTokenExpiresAt",
+      "value": ""
+    },
+    {
+      "key": "residentFullName",
+      "value": "New Resident"
+    },
+    {
+      "key": "residentEmail",
+      "value": "new.resident@example.com"
+    },
+    {
+      "key": "residentPassword",
+      "value": "Passw0rd!"
+    },
+    {
+      "key": "residentId",
+      "value": "1"
+    },
+    {
+      "key": "residentsPage",
+      "value": "0"
+    },
+    {
+      "key": "residentsSize",
+      "value": "20"
+    },
+    {
+      "key": "residentsQuery",
+      "value": ""
+    },
+    {
+      "key": "houseAddress",
+      "value": "123 Palm Street"
+    },
+    {
+      "key": "houseId",
+      "value": "1"
+    },
+    {
+      "key": "houseQrToken",
+      "value": "house-001-qr-token"
+    },
+    {
+      "key": "houseResidentName",
+      "value": "Ricardo Lima"
+    },
+    {
+      "key": "houseResidentEmail",
+      "value": "ricardo.lima@example.com"
+    },
+    {
+      "key": "onboardingSessionToken",
+      "value": ""
+    },
+    {
+      "key": "onboardingVerificationToken",
+      "value": ""
+    },
+    {
+      "key": "feedLimit",
+      "value": "10"
+    },
+    {
+      "key": "feedCursor",
+      "value": ""
+    },
+    {
+      "key": "feedText",
+      "value": "Hello neighbors!"
+    },
+    {
+      "key": "feedMediaUrl",
+      "value": "https://images.unsplash.com/photo-1506744038136-46273834b3fb"
+    }
+  ]
+}

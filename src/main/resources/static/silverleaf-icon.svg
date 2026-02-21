@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Silverleaf Reserve">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1f7a4f"/>
+      <stop offset="100%" stop-color="#0b4f6c"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#d8f3dc"/>
+      <stop offset="100%" stop-color="#95d5b2"/>
+    </linearGradient>
+  </defs>
+  <rect x="3" y="3" width="58" height="58" rx="14" fill="url(#bg)"/>
+  <path d="M14 39c0-13 12-23 30-24-1 18-11 30-24 30-3 0-6-2-6-6z" fill="url(#leaf)"/>
+  <path d="M22 42c4-8 12-14 22-18" stroke="#0f3a2f" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="50" cy="18" r="4" fill="#e9f5ec" opacity=".9"/>
+</svg>

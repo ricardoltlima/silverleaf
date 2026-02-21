@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: silverleaf-postgres
+    environment:
+      POSTGRES_DB: silverleaf
+      POSTGRES_USER: silverleaf
+      POSTGRES_PASSWORD: silverleaf
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U silverleaf -d silverleaf" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pg_data:

@@ -1,0 +1,853 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Silverleaf Reserve</title>
+    <style>
+        :root {
+            --bg: #f3f2ef;
+            --surface: #ffffff;
+            --line: #dadada;
+            --text: #1f1f1f;
+            --muted: #666666;
+            --brand: #0a66c2;
+            --ok: #18794e;
+            --danger: #a61b1b;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--text);
+            background: var(--bg);
+        }
+
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background: var(--surface);
+            border-bottom: 1px solid var(--line);
+        }
+
+        .topbar-inner {
+            width: min(1120px, 96vw);
+            margin: 0 auto;
+            height: 56px;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .top-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo {
+            width: 36px;
+            height: 36px;
+            display: block;
+            border-radius: 8px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+        }
+
+        .search {
+            width: min(340px, 50vw);
+            border: 1px solid #c4c4c4;
+            border-radius: 22px;
+            background: #eef3f8;
+            padding: 10px 14px;
+            color: #2e2e2e;
+            font-size: 0.92rem;
+        }
+
+        .top-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .nav-item {
+            display: grid;
+            justify-items: center;
+            gap: 2px;
+            min-width: 56px;
+            color: #555;
+            font-size: 0.75rem;
+            padding: 6px 8px;
+            border-radius: 10px;
+            white-space: nowrap;
+            border: none;
+            background: transparent;
+            box-shadow: none;
+            appearance: none;
+            cursor: pointer;
+            transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease, background 140ms ease;
+            font-family: inherit;
+        }
+
+        .nav-item img {
+            width: 20px;
+            height: 20px;
+            display: block;
+        }
+
+        .nav-item:hover {
+            transform: translateY(-2px);
+            background: linear-gradient(180deg, #ffffff 0%, #efefef 100%);
+            border: 1px solid #d3d3d3;
+            box-shadow: 0 4px 0 #b8b8b8, 0 8px 14px rgba(0, 0, 0, 0.12);
+            filter: brightness(1.02);
+        }
+
+        .nav-item:active {
+            transform: translateY(1px);
+            background: linear-gradient(180deg, #f1f1f1 0%, #e5e5e5 100%);
+            box-shadow: 0 1px 0 #b8b8b8, 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .token-wrap input {
+            width: min(260px, 44vw);
+            border: 1px solid #b8b8b8;
+            border-radius: 18px;
+            padding: 8px 12px;
+            font-size: 0.86rem;
+            background: #fff;
+        }
+
+        .layout {
+            width: min(1120px, 96vw);
+            margin: 14px auto;
+            display: grid;
+            grid-template-columns: 220px minmax(0, 1fr) 280px;
+            gap: 16px;
+            align-items: start;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .left-profile {
+            position: sticky;
+            top: 72px;
+        }
+
+        .profile-cover {
+            height: 70px;
+            background: linear-gradient(120deg, #1258a8, #1f8ee4);
+        }
+
+        .profile-main {
+            padding: 0 14px 12px;
+            text-align: center;
+        }
+
+        .avatar {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            margin: -36px auto 8px;
+            border: 3px solid #fff;
+            background: #d6e6f8;
+            overflow: hidden;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .profile-main h3 {
+            margin: 0 0 4px;
+            font-size: 1.1rem;
+        }
+
+        .sub {
+            margin: 0;
+            font-size: 0.86rem;
+            color: var(--muted);
+        }
+
+        .left-links {
+            margin-top: 8px;
+            padding: 8px 12px 12px;
+            font-size: 0.9rem;
+        }
+
+        .left-links .item {
+            padding: 8px 0;
+            border-top: 1px solid #ececec;
+            color: #39424a;
+            font-weight: 600;
+        }
+
+        .feed-col {
+            min-height: 70vh;
+        }
+
+        .composer {
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+
+        .composer-wrap {
+            position: relative;
+        }
+
+        .composer textarea {
+            width: 100%;
+            min-height: 64px;
+            border: 1px solid #b7b7b7;
+            border-radius: 32px;
+            padding: 16px 134px 14px 18px;
+            resize: vertical;
+            font-size: 0.95rem;
+            font-family: inherit;
+        }
+
+        .composer-inline-actions {
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .icon-btn {
+            width: 22px;
+            height: 22px;
+            border: none;
+            background: transparent;
+            color: #2f3c46;
+            cursor: pointer;
+            display: grid;
+            place-items: center;
+            padding: 0;
+        }
+
+        .icon-btn img {
+            width: 22px;
+            height: 22px;
+            display: block;
+        }
+
+        .icon-btn:hover {
+            transform: scale(1.08);
+        }
+
+        .hint {
+            margin-top: 8px;
+            color: var(--muted);
+            font-size: 0.82rem;
+        }
+
+        .status {
+            min-height: 18px;
+            margin-top: 6px;
+            font-size: 0.9rem;
+            color: var(--danger);
+        }
+
+        .post {
+            padding: 12px;
+            margin-bottom: 8px;
+        }
+
+        .post-head {
+            display: grid;
+            grid-template-columns: 42px 1fr;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .post-avatar {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: #dce8f8;
+        }
+
+        .post h4 {
+            margin: 0;
+            font-size: 0.98rem;
+        }
+
+        .post time {
+            color: var(--muted);
+            font-size: 0.82rem;
+        }
+
+        .post p {
+            margin: 8px 0 12px;
+            line-height: 1.42;
+        }
+
+        .media-grid {
+            display: grid;
+            gap: 8px;
+        }
+
+        .attachment-list {
+            display: grid;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .attachment-link {
+            display: inline-block;
+            padding: 6px 10px;
+            border: 1px solid #d7d7d7;
+            border-radius: 8px;
+            background: #f8f8f8;
+            color: #2e2e2e;
+            text-decoration: none;
+            font-size: 0.88rem;
+        }
+
+        .attachment-link:hover {
+            background: #efefef;
+        }
+
+        .media-grid img,
+        .media-grid video {
+            width: 100%;
+            border-radius: 8px;
+            border: 1px solid #d6d6d6;
+            background: #000;
+            max-height: 420px;
+            object-fit: cover;
+        }
+
+        .post-footer {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #ececec;
+            color: #575757;
+            font-size: 0.86rem;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .right-rail {
+            position: sticky;
+            top: 72px;
+        }
+
+        .news {
+            padding: 12px;
+        }
+
+        .news h3 {
+            margin: 0 0 8px;
+            font-size: 1.3rem;
+        }
+
+        .news-item {
+            margin-bottom: 10px;
+        }
+
+        .news-item b {
+            display: block;
+            margin-bottom: 2px;
+            font-size: 0.92rem;
+        }
+
+        .news-item span {
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
+
+        .loading {
+            text-align: center;
+            color: #4f4f4f;
+            font-weight: 700;
+            padding: 16px;
+        }
+
+        @media (max-width: 1100px) {
+            .layout {
+                grid-template-columns: 220px minmax(0, 1fr);
+            }
+
+            .right-rail {
+                display: none;
+            }
+        }
+
+        @media (max-width: 850px) {
+            .topbar-inner {
+                grid-template-columns: 1fr;
+                height: auto;
+                padding: 8px 0;
+            }
+
+            .top-right {
+                justify-content: space-between;
+                overflow-x: auto;
+            }
+
+            .layout {
+                grid-template-columns: 1fr;
+            }
+
+            .left-profile {
+                position: static;
+            }
+        }
+    </style>
+</head>
+<body>
+<header class="topbar">
+    <div class="topbar-inner">
+        <div class="top-left">
+            <img class="logo" src="/silverleaf-icon.svg" alt="Silverleaf Reserve">
+            <input class="search" placeholder="Search neighbors, topics, services...">
+        </div>
+        <div class="top-right">
+            <button class="nav-item" type="button"><img src="/icon-home.svg" alt=""><span>Home</span></button>
+            <button class="nav-item" type="button"><img src="/icon-messages.svg" alt=""><span>Messages</span></button>
+            <button class="nav-item" type="button"><img src="/icon-notifications.svg" alt=""><span>Notifications</span></button>
+            <div class="token-wrap">
+                <input id="tokenInput" type="password" placeholder="JWT access token">
+            </div>
+        </div>
+    </div>
+</header>
+
+<main class="layout">
+    <aside class="left-profile">
+        <section class="card">
+            <div class="profile-cover"></div>
+            <div class="profile-main">
+                <div class="avatar" id="profileAvatar" title="Click to upload profile photo">
+                    <img id="profileAvatarImg" alt="Profile photo">
+                </div>
+                <input id="profileAvatarInput" type="file" accept="image/*" style="display:none">
+                <h3>Silverleaf Resident</h3>
+                <p class="sub">Community feed and updates</p>
+            </div>
+            <div class="left-links">
+                <div class="item">HOA</div>
+                <div class="item">Services</div>
+                <div class="item">Alerts</div>
+                <div class="item">Garage Sale</div>
+                <div class="item">Reservations</div>
+            </div>
+        </section>
+    </aside>
+
+    <section class="feed-col">
+        <article class="card composer">
+            <div class="composer-wrap">
+                <textarea id="postText" placeholder="Start a post"></textarea>
+                <div class="composer-inline-actions">
+                    <button id="addMediaBtn" class="icon-btn" type="button" title="Add photo or video">
+                        <img src="/icon-media.svg" alt="Add media">
+                    </button>
+                    <button id="addAttachmentBtn" class="icon-btn" type="button" title="Attach file">
+                        <img src="/icon-clip.svg" alt="Attach file">
+                    </button>
+                    <button id="publishBtn" class="icon-btn" type="button" title="Publish">
+                        <img src="/icon-send.svg" alt="Send post">
+                    </button>
+                </div>
+            </div>
+            <input id="mediaFileInput" type="file" accept="image/*,video/*" multiple style="display:none">
+            <input id="attachmentFileInput" type="file" multiple style="display:none">
+            <div class="hint">Use media icon for photos/videos and clip icon for file attachments.</div>
+            <div id="composerStatus" class="status"></div>
+        </article>
+
+        <div id="feed"></div>
+        <div id="loading" class="loading">Loading posts...</div>
+        <div id="sentinel"></div>
+    </section>
+
+    <aside class="right-rail">
+        <section class="card news">
+            <h3>Silverleaf News</h3>
+            <div class="news-item">
+                <b>Pool maintenance this Friday</b>
+                <span>3h ago</span>
+            </div>
+            <div class="news-item">
+                <b>Neighborhood watch update</b>
+                <span>5h ago</span>
+            </div>
+            <div class="news-item">
+                <b>Garage sale registrations open</b>
+                <span>9h ago</span>
+            </div>
+            <div class="news-item">
+                <b>HOA monthly meeting agenda posted</b>
+                <span>1d ago</span>
+            </div>
+        </section>
+    </aside>
+</main>
+
+<script>
+    const tokenInput = document.getElementById("tokenInput");
+    const feedEl = document.getElementById("feed");
+    const loadingEl = document.getElementById("loading");
+    const sentinel = document.getElementById("sentinel");
+    const postText = document.getElementById("postText");
+    const addMediaBtn = document.getElementById("addMediaBtn");
+    const addAttachmentBtn = document.getElementById("addAttachmentBtn");
+    const publishBtn = document.getElementById("publishBtn");
+    const composerStatus = document.getElementById("composerStatus");
+    const mediaFileInput = document.getElementById("mediaFileInput");
+    const attachmentFileInput = document.getElementById("attachmentFileInput");
+    const profileAvatar = document.getElementById("profileAvatar");
+    const profileAvatarImg = document.getElementById("profileAvatarImg");
+    const profileAvatarInput = document.getElementById("profileAvatarInput");
+
+    let nextCursor = null;
+    let loading = false;
+    let finished = false;
+    let queuedMedia = [];
+
+    tokenInput.value = localStorage.getItem("silverleaf_access_token") || "";
+    profileAvatarImg.src = localStorage.getItem("silverleaf_profile_photo") || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 72'%3E%3Crect width='72' height='72' fill='%23d6e6f8'/%3E%3Ccircle cx='36' cy='27' r='14' fill='%23a5bfdc'/%3E%3Cellipse cx='36' cy='60' rx='22' ry='14' fill='%23a5bfdc'/%3E%3C/svg%3E";
+    tokenInput.addEventListener("change", () => {
+        localStorage.setItem("silverleaf_access_token", tokenInput.value.trim());
+        resetAndLoad();
+    });
+    profileAvatar.addEventListener("click", () => profileAvatarInput.click());
+    profileAvatarInput.addEventListener("change", () => {
+        const file = profileAvatarInput.files && profileAvatarInput.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            const dataUrl = String(reader.result || "");
+            profileAvatarImg.src = dataUrl;
+            localStorage.setItem("silverleaf_profile_photo", dataUrl);
+        };
+        reader.readAsDataURL(file);
+    });
+
+    addMediaBtn.addEventListener("click", () => {
+        const token = tokenInput.value.trim();
+        if (!token) {
+            setError("Add your JWT access token first.");
+            return;
+        }
+        mediaFileInput.click();
+    });
+
+    mediaFileInput.addEventListener("change", async () => {
+        const token = tokenInput.value.trim();
+        const files = Array.from(mediaFileInput.files || []);
+        if (!files.length) return;
+        if (!token) {
+            setError("Add your JWT access token first.");
+            return;
+        }
+
+        let uploadedCount = 0;
+        for (const file of files) {
+            const formData = new FormData();
+            formData.append("file", file);
+            try {
+                const res = await fetch("/api/v1/feed/uploads", {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                if (!res.ok) {
+                    const err = await safeJson(res);
+                    setError(err.message || "Failed to upload media.");
+                    continue;
+                }
+                const uploaded = await res.json();
+                queuedMedia.push({ type: uploaded.type, url: uploaded.url });
+                uploadedCount++;
+            } catch {
+                setError("Network error during media upload.");
+            }
+        }
+
+        mediaFileInput.value = "";
+        if (uploadedCount > 0) {
+            composerStatus.style.color = "var(--ok)";
+            composerStatus.textContent = `${queuedMedia.length} media item(s) queued`;
+        }
+    });
+
+    addAttachmentBtn.addEventListener("click", () => {
+        const token = tokenInput.value.trim();
+        if (!token) {
+            setError("Add your JWT access token first.");
+            return;
+        }
+        attachmentFileInput.click();
+    });
+
+    attachmentFileInput.addEventListener("change", async () => {
+        const token = tokenInput.value.trim();
+        const files = Array.from(attachmentFileInput.files || []);
+        if (!files.length) return;
+        if (!token) {
+            setError("Add your JWT access token first.");
+            return;
+        }
+
+        let uploadedCount = 0;
+        for (const file of files) {
+            const formData = new FormData();
+            formData.append("file", file);
+            try {
+                const res = await fetch("/api/v1/feed/uploads?attachment=true", {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                if (!res.ok) {
+                    const err = await safeJson(res);
+                    setError(err.message || "Failed to upload attachment.");
+                    continue;
+                }
+                const uploaded = await res.json();
+                queuedMedia.push({ type: uploaded.type, url: uploaded.url });
+                uploadedCount++;
+            } catch {
+                setError("Network error during attachment upload.");
+            }
+        }
+
+        attachmentFileInput.value = "";
+        if (uploadedCount > 0) {
+            composerStatus.style.color = "var(--ok)";
+            composerStatus.textContent = `${queuedMedia.length} total item(s) queued`;
+        }
+    });
+
+    publishBtn.addEventListener("click", async () => {
+        const token = tokenInput.value.trim();
+        if (!token) {
+            setError("Add your JWT access token to publish.");
+            return;
+        }
+
+        const payload = {
+            text: postText.value,
+            media: queuedMedia
+        };
+
+        try {
+            const res = await fetch("/api/v1/feed/posts", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) {
+                const err = await safeJson(res);
+                setError(err.message || "Failed to publish post.");
+                return;
+            }
+
+            const post = await res.json();
+            prependPost(post);
+            postText.value = "";
+            queuedMedia = [];
+            composerStatus.style.color = "var(--ok)";
+            composerStatus.textContent = "Post published.";
+        } catch (e) {
+            setError("Network error while publishing.");
+        }
+    });
+
+    function setError(message) {
+        composerStatus.style.color = "var(--danger)";
+        composerStatus.textContent = message;
+    }
+
+    async function loadMore() {
+        if (loading || finished) return;
+        loading = true;
+        loadingEl.textContent = "Loading posts...";
+
+        const token = tokenInput.value.trim();
+        if (!token) {
+            loadingEl.textContent = "Add your JWT token to load feed.";
+            loading = false;
+            return;
+        }
+
+        try {
+            const params = new URLSearchParams({ limit: "10" });
+            if (nextCursor) params.set("cursor", nextCursor);
+            const res = await fetch(`/api/v1/feed?${params.toString()}`, {
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+
+            if (!res.ok) {
+                const err = await safeJson(res);
+                loadingEl.textContent = err.message || "Unable to load feed.";
+                loading = false;
+                return;
+            }
+
+            const data = await res.json();
+            data.items.forEach(renderPost);
+            nextCursor = data.nextCursor;
+            if (!data.items.length || !nextCursor) {
+                finished = true;
+                loadingEl.textContent = "No more posts.";
+            } else {
+                loadingEl.textContent = "";
+            }
+        } catch (e) {
+            loadingEl.textContent = "Network error while loading feed.";
+        } finally {
+            loading = false;
+        }
+    }
+
+    function renderPost(post) {
+        const article = document.createElement("article");
+        article.className = "card post";
+        article.dataset.postId = String(post.id);
+
+        const created = new Date(post.createdAt).toLocaleString();
+        const text = post.text ? `<p>${escapeHtml(post.text)}</p>` : "";
+        const media = renderMedia(post.media || []);
+
+        article.innerHTML = `
+            <div class="post-head">
+                <div class="post-avatar"></div>
+                <div>
+                    <h4>${escapeHtml(post.authorName)}</h4>
+                    <time>${created}</time>
+                </div>
+            </div>
+            ${text}
+            ${media}
+            <div class="post-footer">
+                <span>Like</span><span>Comment</span><span>Repost</span><span>Send</span>
+            </div>
+        `;
+        feedEl.appendChild(article);
+    }
+
+    function prependPost(post) {
+        const marker = feedEl.firstChild;
+        const article = document.createElement("article");
+        article.className = "card post";
+        article.dataset.postId = String(post.id);
+
+        const created = new Date(post.createdAt).toLocaleString();
+        const text = post.text ? `<p>${escapeHtml(post.text)}</p>` : "";
+        const media = renderMedia(post.media || []);
+
+        article.innerHTML = `
+            <div class="post-head">
+                <div class="post-avatar"></div>
+                <div>
+                    <h4>${escapeHtml(post.authorName)}</h4>
+                    <time>${created}</time>
+                </div>
+            </div>
+            ${text}
+            ${media}
+            <div class="post-footer">
+                <span>Like</span><span>Comment</span><span>Repost</span><span>Send</span>
+            </div>
+        `;
+
+        if (marker) {
+            feedEl.insertBefore(article, marker);
+        } else {
+            feedEl.appendChild(article);
+        }
+    }
+
+    function renderMedia(media) {
+        if (!media.length) return "";
+        const visualMedia = media.filter(item => item.type === "IMAGE" || item.type === "VIDEO");
+        const attachments = media.filter(item => item.type === "FILE");
+
+        const visual = visualMedia.map(item => {
+            if (item.type === "VIDEO") {
+                return `<video controls src="${escapeAttr(item.url)}"></video>`;
+            }
+            return `<img alt="Post image" src="${escapeAttr(item.url)}">`;
+        }).join("");
+
+        const attachmentLinks = attachments.map(item => {
+            const fileName = decodeURIComponent(item.url.split("/").pop() || "attachment");
+            return `<a class="attachment-link" href="${escapeAttr(item.url)}" target="_blank" rel="noopener">${escapeHtml(fileName)}</a>`;
+        }).join("");
+
+        const visualSection = visual ? `<div class="media-grid">${visual}</div>` : "";
+        const attachmentsSection = attachmentLinks ? `<div class="attachment-list">${attachmentLinks}</div>` : "";
+        return visualSection + attachmentsSection;
+    }
+
+    function escapeHtml(str) {
+        return String(str)
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;");
+    }
+
+    function escapeAttr(str) {
+        return escapeHtml(str).replaceAll('"', "&quot;");
+    }
+
+    async function safeJson(response) {
+        try {
+            return await response.json();
+        } catch {
+            return {};
+        }
+    }
+
+    function resetAndLoad() {
+        nextCursor = null;
+        loading = false;
+        finished = false;
+        feedEl.innerHTML = "";
+        loadingEl.textContent = "Loading posts...";
+        loadMore();
+    }
+
+    const observer = new IntersectionObserver(entries => {
+        if (entries.some(e => e.isIntersecting)) {
+            loadMore();
+        }
+    }, { rootMargin: "700px 0px 700px 0px" });
+
+    observer.observe(sentinel);
+    loadMore();
+</script>
+</body>
+</html>
