@@ -9,8 +9,8 @@ import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as ecs from "aws-cdk-lib/aws-ecs";
 import * as ecsPatterns from "aws-cdk-lib/aws-ecs-patterns";
+import * as ecr from "aws-cdk-lib/aws-ecr";
 import * as elasticache from "aws-cdk-lib/aws-elasticache";
-import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as rds from "aws-cdk-lib/aws-rds";
 import * as s3 from "aws-cdk-lib/aws-s3";
@@ -103,6 +103,7 @@ export class SilverleafPlatformStack extends Stack {
     redisCluster.addDependency(redisSubnetGroup);
 
     const cluster = new ecs.Cluster(this, "Cluster", { vpc });
+    const repository = ecr.Repository.fromRepositoryName(this, "ApiRepository", repositoryName);
 
     const taskDefinition = new ecs.FargateTaskDefinition(this, "ApiTaskDefinition", {
       cpu: config.stage === "prod" ? 1024 : 512,
@@ -115,7 +116,7 @@ export class SilverleafPlatformStack extends Stack {
     });
 
     const container = taskDefinition.addContainer("ApiContainer", {
-      image: ecs.ContainerImage.fromRegistry(`${repositoryUri}:${props.imageTag}`),
+      image: ecs.ContainerImage.fromEcrRepository(repository, props.imageTag),
       logging: ecs.LogDriver.awsLogs({
         streamPrefix: `silverleaf-${config.stage}`,
         logGroup
@@ -152,6 +153,7 @@ export class SilverleafPlatformStack extends Stack {
       taskDefinition,
       publicLoadBalancer: true,
       desiredCount: config.desiredTasks,
+      minHealthyPercent: 100,
       listenerPort: 80,
       taskSubnets: config.stage === "dev"
         ? { subnetType: ec2.SubnetType.PUBLIC }
@@ -173,7 +175,13 @@ export class SilverleafPlatformStack extends Stack {
     });
 
     new cloudwatch.Alarm(this, "Alb5xxAlarm", {
-      metric: service.loadBalancer.metricHttpCodeElb(elbv2.HttpCodeElb.ELB_5XX_COUNT, {
+      metric: new cloudwatch.Metric({
+        namespace: "AWS/ApplicationELB",
+        metricName: "HTTPCode_ELB_5XX_Count",
+        dimensionsMap: {
+          LoadBalancer: service.loadBalancer.loadBalancerFullName
+        },
+        statistic: "Sum",
         period: Duration.minutes(1)
       }),
       threshold: 10,
