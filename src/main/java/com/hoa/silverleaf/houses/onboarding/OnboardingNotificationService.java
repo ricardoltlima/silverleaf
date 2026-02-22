@@ -10,6 +10,9 @@ import org.springframework.stereotype.Service;
 @Service
 public class OnboardingNotificationService {
 
+    private static final String DEFAULT_VERIFICATION_BASE_URL =
+            "http://localhost:8080/api/v1/public/onboarding/verify-web";
+
     private final ObjectProvider<JavaMailSender> mailSenderProvider;
     private final OnboardingProperties onboardingProperties;
 
@@ -56,7 +59,8 @@ public class OnboardingNotificationService {
     private String buildVerificationUrl(String verificationToken) {
         String baseUrl = onboardingProperties.getVerificationBaseUrl();
         if (baseUrl == null || baseUrl.isBlank()) {
-            throw new IllegalStateException("app.onboarding.verification-base-url must be configured");
+            log.warn("app.onboarding.verification-base-url is blank. Falling back to default {}", DEFAULT_VERIFICATION_BASE_URL);
+            baseUrl = DEFAULT_VERIFICATION_BASE_URL;
         }
         return baseUrl.endsWith("/")
                 ? baseUrl + verificationToken
