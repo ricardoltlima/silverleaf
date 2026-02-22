@@ -1,6 +1,7 @@
 package com.hoa.silverleaf.feed;
 
 import com.hoa.silverleaf.feed.dto.UploadMediaResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -13,6 +14,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.Locale;
 import java.util.UUID;
 
+@Slf4j
 @Service
 public class FeedUploadService {
 
@@ -20,10 +22,12 @@ public class FeedUploadService {
 
     public FeedUploadService(@Value("${app.feed.upload-dir:uploads}") String uploadDir) {
         this.uploadPath = Paths.get(uploadDir).toAbsolutePath().normalize();
+        log.info("Feed upload path configured path={}", this.uploadPath);
     }
 
     public UploadMediaResponse upload(MultipartFile file, boolean asAttachment) {
         if (file == null || file.isEmpty()) {
+            log.warn("Feed upload rejected because file is missing or empty");
             throw new IllegalArgumentException("File is required");
         }
 
@@ -37,7 +41,10 @@ public class FeedUploadService {
             Files.createDirectories(uploadPath);
             Path target = uploadPath.resolve(fileName).normalize();
             Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+            log.info("Feed file stored path={} mediaType={} asAttachment={}",
+                    target, mediaType, asAttachment);
         } catch (IOException ex) {
+            log.error("Failed to persist uploaded file mediaType={} asAttachment={}", mediaType, asAttachment, ex);
             throw new IllegalStateException("Unable to store file");
         }
 
@@ -56,6 +63,7 @@ public class FeedUploadService {
                 || name.endsWith(".mov")) {
             return FeedMediaType.VIDEO;
         }
+        log.warn("Unsupported upload type contentType={} fileName={}", contentType, originalName);
         throw new IllegalArgumentException("Unsupported file type");
     }
 

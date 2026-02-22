@@ -37,6 +37,7 @@ public class FeedController {
             @RequestParam(required = false) String cursor,
             @RequestParam(defaultValue = "20") int limit
     ) {
+        log.debug("Feed read requested cursor={} limit={}", cursor, limit);
         return feedService.getFeed(cursor, limit);
     }
 
@@ -56,7 +57,8 @@ public class FeedController {
             @RequestParam(defaultValue = "false") boolean attachment,
             @RequestPart("file") MultipartFile file
     ) {
-        log.info("Feed media upload requested by userId={}", principal.getId());
+        log.info("Feed media upload requested by userId={} attachment={} contentType={} size={}",
+                principal.getId(), attachment, file.getContentType(), file.getSize());
         return feedUploadService.upload(file, attachment);
     }
 }

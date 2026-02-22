@@ -52,7 +52,7 @@ public class UserController {
     @PreAuthorize("hasRole('HOA_ADMIN')")
     @ResponseStatus(HttpStatus.CREATED)
     public ResidentResponse createResident(@Valid @RequestBody CreateResidentRequest request) {
-        log.info("Resident create requested by HOA admin for email={}", request.email());
+        log.info("Resident create requested by HOA admin emailLength={}", request.email() == null ? 0 : request.email().length());
         return userService.createResident(request);
     }
 

@@ -29,13 +29,13 @@ public class AuthController {
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     public AuthResponse register(@Valid @RequestBody RegisterRequest request) {
-        log.info("Register request received for email={}", request.email());
+        log.info("Register request received emailLength={}", request.email() == null ? 0 : request.email().length());
         return authService.register(request);
     }
 
     @PostMapping("/login")
     public AuthResponse login(@Valid @RequestBody AuthRequest request) {
-        log.info("Login request received for email={}", request.email());
+        log.info("Login request received emailLength={}", request.email() == null ? 0 : request.email().length());
         return authService.login(request);
     }
 

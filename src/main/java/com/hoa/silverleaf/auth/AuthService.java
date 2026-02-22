@@ -71,6 +71,7 @@ public class AuthService {
     @Transactional
     public AuthResponse login(AuthRequest request) {
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
+        // Authentication is delegated to Spring Security so account lock/disable rules stay centralized.
         log.debug("Authenticating user email={}", normalizedEmail);
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(normalizedEmail, request.password())
@@ -85,7 +86,7 @@ public class AuthService {
 
     @Transactional
     public AuthResponse refresh(RefreshRequest request) {
-        log.debug("Refreshing access token");
+        log.debug("Refreshing access token refreshTokenLength={}", request.refreshToken() == null ? 0 : request.refreshToken().length());
         RefreshTokenEntity token = refreshTokenRepository.findByToken(request.refreshToken())
                 .orElseThrow(() -> new IllegalArgumentException("Invalid refresh token"));
         if (token.isRevoked() || token.getExpiresAt().isBefore(Instant.now())) {
@@ -95,6 +96,7 @@ public class AuthService {
 
         token.setRevoked(true);
         refreshTokenRepository.save(token);
+        // Opportunistic cleanup keeps token table compact without a separate scheduled job.
         refreshTokenRepository.deleteByExpiresAtBeforeOrRevokedIsTrue(Instant.now());
         log.info("Refresh token rotated for userId={}", token.getUser().getId());
 

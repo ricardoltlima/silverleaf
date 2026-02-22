@@ -40,8 +40,11 @@ public class FeedService {
 
     @Transactional(readOnly = true)
     public FeedPageResponse getFeed(String cursor, int limit) {
+        // Cursor-based pagination keeps reads stable for infinite-scroll clients.
         int pageSize = Math.max(1, Math.min(limit, 50));
         CursorParts cursorParts = parseCursor(cursor);
+        log.debug("Loading feed page pageSize={} cursorCreatedAt={} cursorPostId={}",
+                pageSize, cursorParts.createdAt(), cursorParts.id());
         List<FeedPostEntity> posts;
         if (cursorParts.createdAt() == null || cursorParts.id() == null) {
             posts = feedPostRepository.findAllByOrderByCreatedAtDescIdDesc(PageRequest.of(0, pageSize));
@@ -59,6 +62,7 @@ public class FeedService {
                 .toList();
 
         String nextCursor = items.isEmpty() ? null : buildCursor(items.get(items.size() - 1).createdAt(), items.get(items.size() - 1).id());
+        log.debug("Feed page loaded itemCount={} hasNext={}", items.size(), nextCursor != null);
         return new FeedPageResponse(items, nextCursor);
     }
 
@@ -67,6 +71,7 @@ public class FeedService {
         String text = request.text() == null ? "" : request.text().trim();
         List<CreateFeedPostMediaRequest> media = request.media() == null ? List.of() : request.media();
         if (text.isBlank() && media.isEmpty()) {
+            log.warn("Rejected empty post create attempt userId={}", principal.getId());
             throw new IllegalArgumentException("Post must contain text or media");
         }
 
@@ -90,7 +95,8 @@ public class FeedService {
             mediaResponses.add(new FeedPostMediaResponse(item.type(), item.url().trim()));
         }
 
-        log.info("Feed post created postId={} authorUserId={}", savedPost.getId(), author.getId());
+        log.info("Feed post created postId={} authorUserId={} textLength={} mediaCount={}",
+                savedPost.getId(), author.getId(), text.length(), mediaResponses.size());
         return toResponse(savedPost, mediaResponses);
     }
 
@@ -132,6 +138,7 @@ public class FeedService {
             Long id = Long.parseLong(parts[1]);
             return new CursorParts(createdAt, id);
         } catch (NumberFormatException ex) {
+            log.warn("Invalid feed cursor format cursor={}", cursor);
             throw new IllegalArgumentException("Invalid cursor");
         }
     }

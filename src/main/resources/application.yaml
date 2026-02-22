@@ -1,6 +1,8 @@
 spring:
   application:
     name: silverleaf-backend
+  profiles:
+    default: local
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5433/silverleaf}
     username: ${DB_USERNAME:silverleaf}
@@ -15,6 +17,17 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  mail:
+    host: ${SMTP_HOST:}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SMTP_AUTH:true}
+          starttls:
+            enable: ${SMTP_STARTTLS_ENABLE:true}
 
 server:
   error:
@@ -28,6 +41,14 @@ logging:
 app:
   feed:
     upload-dir: ${FEED_UPLOAD_DIR:uploads}
+  onboarding:
+    verification-base-url: ${ONBOARDING_VERIFICATION_BASE_URL:http://localhost:8080/api/v1/public/onboarding/verify-web}
+    local-login-enabled: ${ONBOARDING_LOCAL_LOGIN_ENABLED:false}
+    notification:
+      from-email: ${ONBOARDING_FROM_EMAIL:no-reply@silverleaf.local}
+      email-enabled: ${ONBOARDING_EMAIL_ENABLED:false}
+    google:
+      client-id: ${GOOGLE_OAUTH_CLIENT_ID:}
   security:
     jwt:
       issuer: silverleaf

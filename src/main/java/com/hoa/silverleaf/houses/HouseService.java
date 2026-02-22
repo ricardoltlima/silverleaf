@@ -26,24 +26,30 @@ public class HouseService {
 
     @Transactional(readOnly = true)
     public List<HouseResponse> listHouses() {
-        return houseRepository.findAllByOrderByAddressAsc().stream()
+        List<HouseResponse> houses = houseRepository.findAllByOrderByAddressAsc().stream()
                 .map(this::toResponse)
                 .toList();
+        log.debug("Listed all houses count={}", houses.size());
+        return houses;
     }
 
     @Transactional(readOnly = true)
     public List<HouseResponse> listPendingHouses() {
-        return houseRepository.findByStatusInOrderByAddressAsc(
+        // Pending means unknown occupancy or explicitly not occupied yet.
+        List<HouseResponse> pendingHouses = houseRepository.findByStatusInOrderByAddressAsc(
                         Arrays.asList(HouseStatus.UNKNOWN, HouseStatus.NOT_OCCUPIED)
                 ).stream()
                 .map(this::toResponse)
                 .toList();
+        log.debug("Listed pending houses count={}", pendingHouses.size());
+        return pendingHouses;
     }
 
     @Transactional
     public HouseResponse createHouse(CreateHouseRequest request) {
         String normalizedAddress = request.address().trim();
         if (houseRepository.existsByAddressIgnoreCase(normalizedAddress)) {
+            log.warn("House create rejected because address already exists address={}", normalizedAddress);
             throw new IllegalArgumentException("Address already exists");
         }
 
@@ -58,8 +64,11 @@ public class HouseService {
 
     @Transactional(readOnly = true)
     public HouseResponse getHouseByQrToken(String qrToken) {
+        log.debug("House lookup by QR token requested tokenPrefix={}",
+                qrToken.length() >= 8 ? qrToken.substring(0, 8) : qrToken);
         HouseEntity house = houseRepository.findByQrToken(qrToken)
                 .orElseThrow(() -> new NotFoundException("House not found"));
+        log.debug("House lookup by QR token resolved houseId={}", house.getId());
         return toResponse(house);
     }
 

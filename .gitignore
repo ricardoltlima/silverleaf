@@ -37,3 +37,9 @@ out/
 
 ### VS Code ###
 .vscode/
+
+# CDK local artifacts
+infra/aws-cdk/node_modules/
+infra/aws-cdk/dist/
+infra/aws-cdk/cdk.out/
+infra/aws-cdk/cdk.context.json

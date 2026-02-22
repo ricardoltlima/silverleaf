@@ -58,6 +58,18 @@ public class OnboardingSessionEntity {
     @Column(name = "auth_subject", length = 255)
     private String authSubject;
 
+    @Column(name = "pending_provider", length = 30)
+    private String pendingProvider;
+
+    @Column(name = "pending_subject", length = 255)
+    private String pendingSubject;
+
+    @Column(name = "pending_full_name", length = 120)
+    private String pendingFullName;
+
+    @Column(name = "pending_email", length = 320)
+    private String pendingEmail;
+
     @Column(name = "completed_at")
     private Instant completedAt;
 
@@ -151,6 +163,38 @@ public class OnboardingSessionEntity {
 
     public void setAuthSubject(String authSubject) {
         this.authSubject = authSubject;
+    }
+
+    public String getPendingProvider() {
+        return pendingProvider;
+    }
+
+    public void setPendingProvider(String pendingProvider) {
+        this.pendingProvider = pendingProvider;
+    }
+
+    public String getPendingSubject() {
+        return pendingSubject;
+    }
+
+    public void setPendingSubject(String pendingSubject) {
+        this.pendingSubject = pendingSubject;
+    }
+
+    public String getPendingFullName() {
+        return pendingFullName;
+    }
+
+    public void setPendingFullName(String pendingFullName) {
+        this.pendingFullName = pendingFullName;
+    }
+
+    public String getPendingEmail() {
+        return pendingEmail;
+    }
+
+    public void setPendingEmail(String pendingEmail) {
+        this.pendingEmail = pendingEmail;
     }
 
     public Instant getCompletedAt() {

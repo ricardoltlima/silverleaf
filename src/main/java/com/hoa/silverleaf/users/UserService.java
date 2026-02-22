@@ -47,6 +47,7 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public Page<ResidentResponse> listResidents(int page, int size, String q) {
+        // Guardrails prevent abusive page sizes and negative offsets from clients.
         int pageNumber = Math.max(0, page);
         int pageSize = Math.max(1, Math.min(size, 100));
         String normalizedQuery = q == null ? "" : q.trim();
@@ -54,12 +55,18 @@ public class UserService {
 
         log.debug("Listing residents page={}, size={}, q='{}'", pageNumber, pageSize, normalizedQuery);
         if (normalizedQuery.isBlank()) {
-            return userRepository.findByRole(UserRole.RESIDENT, pageable)
+            Page<ResidentResponse> residents = userRepository.findByRole(UserRole.RESIDENT, pageable)
                     .map(this::toResidentResponse);
+            log.debug("Residents listed without query resultCount={} page={} size={}",
+                    residents.getNumberOfElements(), pageNumber, pageSize);
+            return residents;
         }
 
-        return userRepository.searchByRoleAndQuery(UserRole.RESIDENT, normalizedQuery, pageable)
+        Page<ResidentResponse> residents = userRepository.searchByRoleAndQuery(UserRole.RESIDENT, normalizedQuery, pageable)
                 .map(this::toResidentResponse);
+        log.debug("Residents listed with query='{}' resultCount={} page={} size={}",
+                normalizedQuery, residents.getNumberOfElements(), pageNumber, pageSize);
+        return residents;
     }
 
     @Transactional
@@ -83,6 +90,7 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public ResidentResponse getResident(Long id) {
+        log.debug("Resident details requested userId={}", id);
         UserEntity resident = userRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Resident not found"));
         return toResidentResponse(resident);
@@ -116,6 +124,9 @@ public class UserService {
     public ResidentResponse deactivateResident(Long id) {
         UserEntity resident = userRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Resident not found"));
+        if (!resident.isEnabled()) {
+            log.debug("Resident already deactivated userId={}", id);
+        }
         resident.setEnabled(false);
         UserEntity savedResident = userRepository.save(resident);
         log.info("Resident deactivated. userId={}, email={}", savedResident.getId(), savedResident.getEmail());
@@ -126,6 +137,9 @@ public class UserService {
     public ResidentResponse activateResident(Long id) {
         UserEntity resident = userRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Resident not found"));
+        if (resident.isEnabled()) {
+            log.debug("Resident already active userId={}", id);
+        }
         resident.setEnabled(true);
         UserEntity savedResident = userRepository.save(resident);
         log.info("Resident activated. userId={}, email={}", savedResident.getId(), savedResident.getEmail());

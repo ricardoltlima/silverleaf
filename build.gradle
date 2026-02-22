@@ -19,25 +19,48 @@ repositories {
 }
 
 dependencies {
+    // REST API and static content delivery.
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    // Authentication/authorization filter chain and method security.
     implementation 'org.springframework.boot:spring-boot-starter-security'
+    // Bean/request validation annotations and runtime validators.
     implementation 'org.springframework.boot:spring-boot-starter-validation'
+    // JPA, repositories, transaction handling.
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    // Outbound email support for onboarding verification links.
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
+    // Database migration engine.
     implementation 'org.flywaydb:flyway-core'
+    // PostgreSQL-specific Flyway support.
     implementation 'org.flywaydb:flyway-database-postgresql'
+    // OpenAPI/Swagger UI for API exploration.
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.8'
+    // Google token validation client used in onboarding.
+    implementation 'com.google.api-client:google-api-client:2.7.0'
+    // JWT API (token build/parse contracts).
     implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+    // JWT runtime implementation.
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
+    // JWT Jackson integration for JSON payload serialization.
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+    // PostgreSQL JDBC driver.
     runtimeOnly 'org.postgresql:postgresql'
+    // Lombok annotations for source-time code generation.
     compileOnly 'org.projectlombok:lombok'
+    // Lombok annotation processor for main source set.
     annotationProcessor 'org.projectlombok:lombok'
 
+    // Spring testing support (JUnit, assertions, test slices).
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    // Security-specific test helpers/mocks.
     testImplementation 'org.springframework.security:spring-security-test'
+    // Lombok annotations for tests.
     testCompileOnly 'org.projectlombok:lombok'
+    // Lombok annotation processor for test source set.
     testAnnotationProcessor 'org.projectlombok:lombok'
+    // In-memory database for integration/unit tests.
     testRuntimeOnly 'com.h2database:h2'
+    // Explicit JUnit launcher runtime.
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

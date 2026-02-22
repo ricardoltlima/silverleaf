@@ -37,7 +37,7 @@ public class HouseController {
     @PreAuthorize("hasRole('HOA_ADMIN')")
     @ResponseStatus(HttpStatus.CREATED)
     public HouseResponse create(@Valid @RequestBody CreateHouseRequest request) {
-        log.info("House create requested address={}", request.address());
+        log.info("House create requested addressLength={}", request.address() == null ? 0 : request.address().length());
         return houseService.createHouse(request);
     }
 }
