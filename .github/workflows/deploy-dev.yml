@@ -45,6 +45,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
+          role-duration-seconds: 14400
 
       - name: Resolve AWS account id
         run: echo "AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_ENV
@@ -78,6 +79,13 @@ jobs:
       - name: Bootstrap CDK
         run: npx cdk bootstrap aws://$AWS_ACCOUNT_ID/$AWS_REGION
         working-directory: ${{ env.CDK_DIR }}
+
+      - name: Refresh AWS credentials before deploy
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-duration-seconds: 14400
 
       - name: Deploy dev stack
         run: npx cdk deploy SilverleafPlatform-dev -c stage=$STAGE -c imageTag=${GITHUB_SHA} --require-approval never
