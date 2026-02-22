@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Silverleaf Onboarding</title>
+    <style>
+        :root {
+            --bg: #f4f7f1;
+            --card: #ffffff;
+            --accent: #2f6b45;
+            --accent-2: #6ca877;
+            --text: #1f2a22;
+            --muted: #5c6d62;
+            --border: #d9e4da;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Segoe UI", Tahoma, sans-serif;
+            color: var(--text);
+            background: radial-gradient(circle at top left, #dfeee1, var(--bg) 45%);
+            display: grid;
+            place-items: center;
+            padding: 24px;
+        }
+        .card {
+            width: min(760px, 100%);
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            box-shadow: 0 16px 42px rgba(28, 58, 39, .12);
+            padding: 28px;
+        }
+        .logo-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 18px;
+        }
+        .logo {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            display: grid;
+            place-items: center;
+            color: #fff;
+            font-weight: 700;
+        }
+        h1 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+        .muted {
+            color: var(--muted);
+            margin-top: 4px;
+            margin-bottom: 20px;
+        }
+        label {
+            font-weight: 600;
+            display: block;
+            margin-bottom: 8px;
+        }
+        select {
+            width: 100%;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid #c9d7ca;
+            background: #fff;
+            margin-bottom: 18px;
+            font-size: 1rem;
+        }
+        .google-wrap {
+            margin-top: 14px;
+            margin-bottom: 16px;
+        }
+        #message {
+            border-radius: 12px;
+            padding: 12px;
+            font-size: .95rem;
+            display: none;
+        }
+        #message.info {
+            background: #e9f4ec;
+            border: 1px solid #b7d7bf;
+            color: #1f5a31;
+            display: block;
+        }
+        #message.error {
+            background: #fdeceb;
+            border: 1px solid #f2c2be;
+            color: #8f2c28;
+            display: block;
+        }
+        .small {
+            margin-top: 12px;
+            color: #66786d;
+            font-size: .85rem;
+        }
+    </style>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+<main class="card">
+    <div class="logo-row">
+        <div class="logo">S</div>
+        <div>
+            <h1>Silverleaf Reserve</h1>
+            <div class="muted">Choose your home and continue with Google.</div>
+        </div>
+    </div>
+
+    <label for="houseSelect">Where do you live?</label>
+    <select id="houseSelect">
+        <option value="">Loading available addresses...</option>
+    </select>
+
+    <div class="google-wrap">
+        <div id="googleBtn"></div>
+    </div>
+    <div id="localLoginSection" style="display:none; margin-bottom:14px;">
+        <label for="localEmail">Local email</label>
+        <input id="localEmail" type="email" placeholder="resident@example.com" style="width:100%;padding:12px;border:1px solid #c9d7ca;border-radius:12px;margin-bottom:10px;">
+        <label for="localPassword">Password</label>
+        <input id="localPassword" type="password" placeholder="Your password" style="width:100%;padding:12px;border:1px solid #c9d7ca;border-radius:12px;margin-bottom:10px;">
+        <button id="localLoginBtn" type="button" style="width:100%;padding:12px;border:none;border-radius:12px;background:#2f6b45;color:#fff;font-weight:600;cursor:pointer;">
+            Login and continue
+        </button>
+    </div>
+
+    <div id="message"></div>
+    <div class="small">After Google sign-in, we will send a confirmation email. Click the link to enter the app.</div>
+</main>
+
+<script>
+    const API_BASE = "/api/v1/public/onboarding";
+    const houseSelect = document.getElementById("houseSelect");
+    const messageBox = document.getElementById("message");
+    const localLoginSection = document.getElementById("localLoginSection");
+    const localEmailInput = document.getElementById("localEmail");
+    const localPasswordInput = document.getElementById("localPassword");
+    const localLoginBtn = document.getElementById("localLoginBtn");
+
+    function showMessage(type, text) {
+        messageBox.className = type;
+        messageBox.textContent = text;
+    }
+
+    async function loadPendingHouses() {
+        const res = await fetch(`${API_BASE}/houses/pending`);
+        if (!res.ok) throw new Error("Unable to load pending houses");
+        const houses = await res.json();
+        if (!Array.isArray(houses) || houses.length === 0) {
+            houseSelect.innerHTML = "<option value=\"\">No pending houses available</option>";
+            return;
+        }
+        houseSelect.innerHTML = "<option value=\"\">Select your address</option>";
+        houses.forEach((h) => {
+            const option = document.createElement("option");
+            option.value = String(h.id);
+            option.textContent = h.address;
+            houseSelect.appendChild(option);
+        });
+    }
+
+    async function loadPublicConfig() {
+        const res = await fetch(`${API_BASE}/config`);
+        if (!res.ok) throw new Error("Unable to load public config");
+        return res.json();
+    }
+
+    async function startGoogleOnboarding(googleCredential) {
+        const houseId = Number(houseSelect.value);
+        if (!houseId) {
+            showMessage("error", "Select your address first.");
+            return;
+        }
+
+        const res = await fetch(`${API_BASE}/google/start`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ houseId, idToken: googleCredential })
+        });
+
+        if (!res.ok) {
+            let err = "Unable to start onboarding";
+            try {
+                const body = await res.json();
+                err = body.message || err;
+            } catch (_) {}
+            showMessage("error", err);
+            return;
+        }
+
+        showMessage("info", "Verification email sent. Open your email and click the link to access the app.");
+    }
+
+    function renderGoogleButton(clientId) {
+        if (!clientId) {
+            showMessage("error", "Google client is not configured yet.");
+            return;
+        }
+        google.accounts.id.initialize({
+            client_id: clientId,
+            callback: (response) => startGoogleOnboarding(response.credential)
+        });
+        google.accounts.id.renderButton(
+            document.getElementById("googleBtn"),
+            { theme: "outline", size: "large", text: "continue_with", shape: "pill" }
+        );
+    }
+
+    async function localLoginAndComplete() {
+        const houseId = Number(houseSelect.value);
+        const email = String(localEmailInput.value || "").trim();
+        const password = String(localPasswordInput.value || "");
+        if (!houseId) {
+            showMessage("error", "Select your address first.");
+            return;
+        }
+        if (!email || !password) {
+            showMessage("error", "Enter local email and password.");
+            return;
+        }
+
+        const res = await fetch(`${API_BASE}/local/login-and-complete`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ houseId, email, password })
+        });
+        if (!res.ok) {
+            let err = "Unable to login locally";
+            try {
+                const body = await res.json();
+                err = body.message || err;
+            } catch (_) {}
+            showMessage("error", err);
+            return;
+        }
+        const payload = await res.json();
+        const accessToken = payload && payload.auth ? payload.auth.accessToken : null;
+        if (accessToken) {
+            localStorage.setItem("silverleaf_access_token", accessToken);
+        }
+        showMessage("info", "Login successful. Redirecting to main page...");
+        window.location.href = "/";
+    }
+
+    (async function init() {
+        try {
+            await loadPendingHouses();
+            const config = await loadPublicConfig();
+            if (config.localLoginEnabled) {
+                localLoginSection.style.display = "block";
+                document.querySelector(".small").textContent = "Local mode: use email and password to access your account.";
+            } else {
+                renderGoogleButton(config.googleClientId);
+            }
+            localLoginBtn.addEventListener("click", localLoginAndComplete);
+        } catch (err) {
+            showMessage("error", err.message || "Unexpected error during onboarding setup.");
+        }
+    })();
+</script>
+</body>
+</html>

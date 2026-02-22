@@ -1,0 +1,3 @@
+app:
+  onboarding:
+    local-login-enabled: false

@@ -1,0 +1,5 @@
+app:
+  onboarding:
+    local-login-enabled: true
+    notification:
+      email-enabled: false
