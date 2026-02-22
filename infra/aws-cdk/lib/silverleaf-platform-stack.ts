@@ -155,9 +155,10 @@ export class SilverleafPlatformStack extends Stack {
       desiredCount: config.desiredTasks,
       minHealthyPercent: 100,
       listenerPort: 80,
+      assignPublicIp: config.stage === "dev",
       taskSubnets: config.stage === "dev"
-        ? { subnetType: ec2.SubnetType.PUBLIC }
-        : { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }
+          ? { subnetType: ec2.SubnetType.PUBLIC }
+          : { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }
     });
 
     db.connections.allowFrom(service.service, ec2.Port.tcp(5432));

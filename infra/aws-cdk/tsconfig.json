@@ -27,5 +27,6 @@
   },
   "exclude": [
     "cdk.out"
-  ]
+  ],
+  "include": ["bin/**/*", "lib/**/*"]
 }
