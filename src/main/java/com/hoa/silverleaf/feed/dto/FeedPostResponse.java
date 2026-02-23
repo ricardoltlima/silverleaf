@@ -9,6 +9,9 @@ public record FeedPostResponse(
         String authorName,
         String text,
         Instant createdAt,
-        List<FeedPostMediaResponse> media
+        List<FeedPostMediaResponse> media,
+        long likesCount,
+        long commentsCount,
+        List<FeedCommentResponse> comments
 ) {
 }

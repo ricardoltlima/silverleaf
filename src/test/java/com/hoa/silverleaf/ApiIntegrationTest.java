@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -262,13 +263,17 @@ class ApiIntegrationTest {
                                 }
                                 """))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.media.length()").value(1));
+                .andExpect(jsonPath("$.media.length()").value(1))
+                .andExpect(jsonPath("$.likesCount").value(0))
+                .andExpect(jsonPath("$.commentsCount").value(0));
 
         mockMvc.perform(get("/api/v1/feed")
                         .header("Authorization", "Bearer " + token)
                         .param("limit", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].likesCount").exists())
+                .andExpect(jsonPath("$.items[0].commentsCount").exists())
                 .andExpect(jsonPath("$.nextCursor").isNotEmpty());
 
         String nextCursor = objectMapper.readTree(
@@ -286,6 +291,62 @@ class ApiIntegrationTest {
                         .param("limit", "10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(1));
+    }
+
+    @Test
+    void residentsCanLikeCommentAndOwnerCanDeletePost() throws Exception {
+        createUser("feed.owner@example.com", "Passw0rd!", UserRole.RESIDENT, true);
+        createUser("feed.viewer@example.com", "Passw0rd!", UserRole.RESIDENT, true);
+        String ownerToken = loginAndGetAccessToken("feed.owner@example.com", "Passw0rd!");
+        String viewerToken = loginAndGetAccessToken("feed.viewer@example.com", "Passw0rd!");
+
+        MvcResult createdPostResult = mockMvc.perform(post("/api/v1/feed/posts")
+                        .header("Authorization", "Bearer " + ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "text": "Post for interactions"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        long postId = objectMapper.readTree(createdPostResult.getResponse().getContentAsString()).get("id").asLong();
+
+        mockMvc.perform(post("/api/v1/feed/posts/" + postId + "/likes")
+                        .header("Authorization", "Bearer " + viewerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.postId").value(postId))
+                .andExpect(jsonPath("$.liked").value(true))
+                .andExpect(jsonPath("$.likesCount").value(1));
+
+        mockMvc.perform(post("/api/v1/feed/posts/" + postId + "/comments")
+                        .header("Authorization", "Bearer " + viewerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "text": "Great post!"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.text").value("Great post!"));
+
+        mockMvc.perform(get("/api/v1/feed")
+                        .header("Authorization", "Bearer " + ownerToken)
+                        .param("limit", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].id").value(postId))
+                .andExpect(jsonPath("$.items[0].likesCount").value(1))
+                .andExpect(jsonPath("$.items[0].commentsCount").value(1))
+                .andExpect(jsonPath("$.items[0].comments[0].text").value("Great post!"));
+
+        mockMvc.perform(delete("/api/v1/feed/posts/" + postId)
+                        .header("Authorization", "Bearer " + viewerToken))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/api/v1/feed/posts/" + postId)
+                        .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isNoContent());
     }
 
     @Test
