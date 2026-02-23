@@ -10,6 +10,11 @@ spring:
       ddl-auto: create-drop
 
 app:
+  onboarding:
+    verification-base-url: http://localhost:8080/api/v1/public/onboarding/verify-web
+    local-login-enabled: false
+    notification:
+      email-enabled: false
   security:
     jwt:
       issuer: silverleaf-test
