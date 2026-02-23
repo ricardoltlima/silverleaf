@@ -1,8 +1,11 @@
 package com.hoa.silverleaf.users;
 
 import com.hoa.silverleaf.users.dto.CreateResidentRequest;
+import com.hoa.silverleaf.users.dto.AddHouseholdMemberRequest;
+import com.hoa.silverleaf.users.dto.HouseholdResponse;
 import com.hoa.silverleaf.users.dto.MeResponse;
 import com.hoa.silverleaf.users.dto.ResidentResponse;
+import com.hoa.silverleaf.users.dto.UpdateMyProfileRequest;
 import com.hoa.silverleaf.users.dto.UpdateResidentRequest;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +38,25 @@ public class UserController {
     public MeResponse me() {
         log.debug("Me endpoint requested");
         return userService.me();
+    }
+
+    @PutMapping("/me/profile")
+    public MeResponse updateMyProfile(@Valid @RequestBody UpdateMyProfileRequest request) {
+        log.info("Self profile update requested");
+        return userService.updateMyProfile(request);
+    }
+
+    @GetMapping("/me/household")
+    public HouseholdResponse myHousehold() {
+        log.info("My household requested");
+        return userService.getMyHousehold();
+    }
+
+    @PostMapping("/me/household/members")
+    @ResponseStatus(HttpStatus.CREATED)
+    public HouseholdResponse addHouseholdMember(@Valid @RequestBody AddHouseholdMemberRequest request) {
+        log.info("Household member add requested");
+        return userService.addHouseholdMember(request);
     }
 
     @GetMapping("/residents")

@@ -2,6 +2,11 @@ package com.hoa.silverleaf;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hoa.silverleaf.houses.HouseEntity;
+import com.hoa.silverleaf.houses.HouseRepository;
+import com.hoa.silverleaf.houses.HouseResidentEntity;
+import com.hoa.silverleaf.houses.HouseResidentRepository;
+import com.hoa.silverleaf.houses.HouseStatus;
 import com.hoa.silverleaf.users.UserEntity;
 import com.hoa.silverleaf.users.UserRepository;
 import com.hoa.silverleaf.users.UserRole;
@@ -39,6 +44,12 @@ class ApiIntegrationTest {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private HouseRepository houseRepository;
+
+    @Autowired
+    private HouseResidentRepository houseResidentRepository;
 
     @Test
     void residentsListWithoutTokenReturnsUnauthorized() throws Exception {
@@ -345,6 +356,66 @@ class ApiIntegrationTest {
 
         String residentTokenAfterActivation = loginAndGetAccessToken("ricardo.updated@example.com", "NewPassw0rd!");
         assertThat(residentTokenAfterActivation).isNotBlank();
+    }
+
+    @Test
+    void residentCanUpdateProfileAndManageHousehold() throws Exception {
+        createUser("resident.house@example.com", "Passw0rd!", UserRole.RESIDENT, true);
+        HouseEntity house = new HouseEntity();
+        house.setAddress("555 Cypress Lane");
+        house.setQrToken("house555");
+        house.setStatus(HouseStatus.OCCUPIED);
+        houseRepository.save(house);
+
+        HouseResidentEntity primaryResident = new HouseResidentEntity();
+        primaryResident.setHouse(house);
+        primaryResident.setFullName("Resident User");
+        primaryResident.setEmail("resident.house@example.com");
+        houseResidentRepository.save(primaryResident);
+
+        String token = loginAndGetAccessToken("resident.house@example.com", "Passw0rd!");
+
+        mockMvc.perform(put("/api/v1/me/profile")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "Resident Updated",
+                                  "password": "NewPassw0rd!"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fullName").value("Resident Updated"));
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "resident.house@example.com",
+                                  "password": "Passw0rd!"
+                                }
+                                """))
+                .andExpect(status().isUnauthorized());
+
+        String refreshedToken = loginAndGetAccessToken("resident.house@example.com", "NewPassw0rd!");
+
+        mockMvc.perform(get("/api/v1/me/household")
+                        .header("Authorization", "Bearer " + refreshedToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.houseAddress").value("555 Cypress Lane"))
+                .andExpect(jsonPath("$.residents.length()").value(1));
+
+        mockMvc.perform(post("/api/v1/me/household/members")
+                        .header("Authorization", "Bearer " + refreshedToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "Spouse Resident",
+                                  "email": "spouse@example.com"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.residents.length()").value(2));
     }
 
     private String loginAndGetAccessToken(String email, String password) throws Exception {

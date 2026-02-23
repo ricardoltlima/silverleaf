@@ -1,10 +1,17 @@
 package com.hoa.silverleaf.users;
 
 import com.hoa.silverleaf.common.NotFoundException;
+import com.hoa.silverleaf.houses.HouseEntity;
+import com.hoa.silverleaf.houses.HouseResidentEntity;
+import com.hoa.silverleaf.houses.HouseResidentRepository;
+import com.hoa.silverleaf.houses.dto.HouseResidentResponse;
 import com.hoa.silverleaf.security.AppUserPrincipal;
+import com.hoa.silverleaf.users.dto.AddHouseholdMemberRequest;
 import com.hoa.silverleaf.users.dto.CreateResidentRequest;
+import com.hoa.silverleaf.users.dto.HouseholdResponse;
 import com.hoa.silverleaf.users.dto.MeResponse;
 import com.hoa.silverleaf.users.dto.ResidentResponse;
+import com.hoa.silverleaf.users.dto.UpdateMyProfileRequest;
 import com.hoa.silverleaf.users.dto.UpdateResidentRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -23,19 +30,21 @@ import java.util.Locale;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final HouseResidentRepository houseResidentRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public UserService(
+            UserRepository userRepository,
+            HouseResidentRepository houseResidentRepository,
+            PasswordEncoder passwordEncoder
+    ) {
         this.userRepository = userRepository;
+        this.houseResidentRepository = houseResidentRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
     public MeResponse me() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !(authentication.getPrincipal() instanceof AppUserPrincipal principal)) {
-            log.warn("Me endpoint called without authenticated principal");
-            throw new IllegalArgumentException("Not authenticated");
-        }
+        AppUserPrincipal principal = requirePrincipal();
         log.debug("Authenticated principal resolved. userId={}, email={}", principal.getId(), principal.getUsername());
         return new MeResponse(
                 principal.getId(),
@@ -154,5 +163,67 @@ public class UserService {
                 user.getRole(),
                 user.isEnabled()
         );
+    }
+
+    @Transactional
+    public MeResponse updateMyProfile(UpdateMyProfileRequest request) {
+        AppUserPrincipal principal = requirePrincipal();
+        UserEntity user = userRepository.findById(principal.getId())
+                .orElseThrow(() -> new NotFoundException("User not found"));
+
+        user.setFullName(request.fullName().trim());
+        if (request.password() != null && !request.password().isBlank()) {
+            user.setPasswordHash(passwordEncoder.encode(request.password()));
+            log.info("Self-service password updated userId={}", user.getId());
+        }
+        UserEntity saved = userRepository.save(user);
+        log.info("Self-service profile updated userId={}", saved.getId());
+        return new MeResponse(saved.getId(), saved.getEmail(), saved.getFullName(), saved.getRole());
+    }
+
+    @Transactional(readOnly = true)
+    public HouseholdResponse getMyHousehold() {
+        AppUserPrincipal principal = requirePrincipal();
+        HouseResidentEntity me = houseResidentRepository.findFirstByEmailIgnoreCaseOrderByIdDesc(principal.getUsername())
+                .orElseThrow(() -> new NotFoundException("No household found for this resident"));
+        return toHouseholdResponse(me.getHouse());
+    }
+
+    @Transactional
+    public HouseholdResponse addHouseholdMember(AddHouseholdMemberRequest request) {
+        AppUserPrincipal principal = requirePrincipal();
+        HouseResidentEntity me = houseResidentRepository.findFirstByEmailIgnoreCaseOrderByIdDesc(principal.getUsername())
+                .orElseThrow(() -> new NotFoundException("No household found for this resident"));
+
+        HouseEntity house = me.getHouse();
+        String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
+        if (houseResidentRepository.existsByHouseIdAndEmailIgnoreCase(house.getId(), normalizedEmail)) {
+            log.warn("Household member add blocked due to duplicate houseId={} email={}", house.getId(), normalizedEmail);
+            throw new IllegalArgumentException("Resident already added to this household");
+        }
+
+        HouseResidentEntity resident = new HouseResidentEntity();
+        resident.setHouse(house);
+        resident.setFullName(request.fullName().trim());
+        resident.setEmail(normalizedEmail);
+        houseResidentRepository.save(resident);
+        log.info("Household member added houseId={} email={}", house.getId(), normalizedEmail);
+        return toHouseholdResponse(house);
+    }
+
+    private HouseholdResponse toHouseholdResponse(HouseEntity house) {
+        var residents = houseResidentRepository.findByHouseIdOrderByIdAsc(house.getId()).stream()
+                .map(r -> new HouseResidentResponse(r.getId(), r.getFullName(), r.getEmail()))
+                .toList();
+        return new HouseholdResponse(house.getId(), house.getAddress(), house.getStatus(), residents);
+    }
+
+    private AppUserPrincipal requirePrincipal() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof AppUserPrincipal principal)) {
+            log.warn("Authenticated principal required but not found");
+            throw new IllegalArgumentException("Not authenticated");
+        }
+        return principal;
     }
 }
