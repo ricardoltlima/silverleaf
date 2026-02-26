@@ -43,10 +43,11 @@ public class FeedController {
             @AuthenticationPrincipal AppUserPrincipal principal,
             @RequestParam(required = false) String cursor,
             @RequestParam(defaultValue = "20") int limit,
-            @RequestParam(defaultValue = "COMMUNITY") FeedChannel channel
+            @RequestParam(defaultValue = "COMMUNITY") FeedChannel channel,
+            @RequestParam(required = false) String groupSlug
     ) {
-        log.debug("Feed read requested cursor={} limit={} channel={}", cursor, limit, channel);
-        return feedService.getFeed(principal, cursor, limit, channel);
+        log.debug("Feed read requested cursor={} limit={} channel={} groupSlug={}", cursor, limit, channel, groupSlug);
+        return feedService.getFeed(principal, cursor, limit, channel, groupSlug);
     }
 
     @PostMapping("/posts")

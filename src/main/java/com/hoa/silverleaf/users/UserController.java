@@ -4,6 +4,7 @@ import com.hoa.silverleaf.users.dto.CreateResidentRequest;
 import com.hoa.silverleaf.users.dto.AddHouseholdMemberRequest;
 import com.hoa.silverleaf.users.dto.HouseholdResponse;
 import com.hoa.silverleaf.users.dto.MeResponse;
+import com.hoa.silverleaf.users.dto.MyProfileResponse;
 import com.hoa.silverleaf.users.dto.ResidentResponse;
 import com.hoa.silverleaf.users.dto.UpdateMyProfileRequest;
 import com.hoa.silverleaf.users.dto.UpdateResidentRequest;
@@ -43,8 +44,14 @@ public class UserController {
         return userService.me();
     }
 
+    @GetMapping("/me/profile")
+    public MyProfileResponse myProfile() {
+        log.debug("My profile requested");
+        return userService.getMyProfile();
+    }
+
     @PutMapping("/me/profile")
-    public MeResponse updateMyProfile(@Valid @RequestBody UpdateMyProfileRequest request) {
+    public MyProfileResponse updateMyProfile(@Valid @RequestBody UpdateMyProfileRequest request) {
         log.info("Self profile update requested");
         return userService.updateMyProfile(request);
     }

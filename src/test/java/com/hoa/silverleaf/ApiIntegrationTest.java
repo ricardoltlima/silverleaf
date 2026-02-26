@@ -452,6 +452,7 @@ class ApiIntegrationTest {
                         .content("""
                                 {
                                   "fullName": "Resident Updated",
+                                  "email": "resident.house@example.com",
                                   "password": "NewPassw0rd!"
                                 }
                                 """))

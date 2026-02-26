@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { clearTokens } from "@/lib/authStorage";
@@ -6,6 +6,10 @@ import { RightRail } from "@/features/layout/RightRail";
 import { PdfDocumentModal } from "@/features/layout/PdfDocumentModal";
 import { ProfilePhotoEditorModal } from "@/features/layout/ProfilePhotoEditorModal";
 import { CommunityStandardsModal } from "@/features/hoa/CommunityStandardsModal";
+import { MessagesModal } from "@/features/messages/MessagesModal";
+import { fetchUnreadCount } from "@/features/messages/messagesApi";
+import { fetchFeed } from "@/features/feed/feedApi";
+import { getUnreadGroupPosts } from "@/features/groups/groupAlerts";
 import {
   fetchCurrentUser,
   fetchMyHousehold,
@@ -14,18 +18,17 @@ import {
 } from "@/features/users/currentUserApi";
 
 const links = [
-  { to: "/community", label: "Home", icon: "/icon-home.svg" },
-  { to: "/messages", label: "Messages", icon: "/icon-messages.svg" },
-  { to: "/profile", label: "Profile", icon: "/icon-notifications.svg" },
-  { to: "/map", label: "Map", icon: "/icon-notifications.svg" }
+  { to: "/community", label: "Home", icon: "/icon-home.svg", type: "route" as const },
+  { to: "/messages", label: "Messages", icon: "/icon-messages.svg", type: "messages" as const },
+  { to: "/alerts", label: "Alerts", icon: "/icon-notifications.svg", type: "route" as const },
+  { to: "/profile", label: "Profile", icon: "/icon-profile.svg", type: "route" as const }
 ];
 
 const boardLinks = [
   { to: "/community", label: "Community" },
   { to: "/services", label: "Services" },
   { to: "/garage-sales", label: "Garage Sales" },
-  { to: "/alerts", label: "Alerts" },
-  { to: "/reservations", label: "Reservations" }
+  { to: "/groups", label: "Groups" }
 ];
 
 function dataUrlToFile(dataUrl: string, fileName: string): File {
@@ -55,6 +58,31 @@ export function AppShell() {
   const [hoaExpanded, setHoaExpanded] = useState(false);
   const [openDoc, setOpenDoc] = useState<null | "community-standards" | "forms">(null);
   const [photoDraft, setPhotoDraft] = useState<string | null>(null);
+  const [messagesOpen, setMessagesOpen] = useState(false);
+  const unreadCountQuery = useQuery({
+    queryKey: ["messages", "unread-count"],
+    queryFn: fetchUnreadCount,
+    refetchInterval: 5000
+  });
+  const groupAlertsQuery = useQuery({
+    queryKey: ["feed", "group", "alerts", "badge"],
+    queryFn: () => fetchFeed(100, "GROUP"),
+    refetchInterval: 5000
+  });
+  const [groupSeenVersion, setGroupSeenVersion] = useState(0);
+
+  useEffect(() => {
+    const onSeenChange = () => setGroupSeenVersion((current) => current + 1);
+    window.addEventListener("silverleaf-group-seen-changed", onSeenChange);
+    return () => {
+      window.removeEventListener("silverleaf-group-seen-changed", onSeenChange);
+    };
+  }, []);
+
+  const unreadGroupAlertsCount = useMemo(
+    () => getUnreadGroupPosts(groupAlertsQuery.data?.items ?? []).length,
+    [groupAlertsQuery.data?.items, groupSeenVersion]
+  );
 
   useEffect(() => {
     if (meQuery.data?.photoUrl !== undefined) {
@@ -115,18 +143,40 @@ export function AppShell() {
 
           <nav className="flex items-center gap-1">
             {links.map((link) => (
-              <NavLink
-                key={link.to}
-                to={link.to}
-                className={({ isActive }) =>
-                  `flex min-w-20 flex-col items-center rounded-lg px-3 py-2 text-xs font-medium transition ${
-                    isActive ? "bg-leaf-50 text-leaf-900" : "text-slate-600 hover:bg-slate-100"
-                  }`
-                }
-              >
-                <img src={link.icon} alt="" className="mb-1 h-5 w-5" />
-                <span>{link.label}</span>
-              </NavLink>
+              link.type === "messages" ? (
+                <button
+                  key={link.to}
+                  type="button"
+                  onClick={() => setMessagesOpen(true)}
+                  className="relative flex min-w-20 flex-col items-center rounded-lg px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-100"
+                >
+                  <img src={link.icon} alt="" className="mb-1 h-5 w-5" />
+                  <span>{link.label}</span>
+                  {(unreadCountQuery.data?.unreadCount ?? 0) > 0 ? (
+                    <span className="absolute right-2 top-1 rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                      {unreadCountQuery.data?.unreadCount}
+                    </span>
+                  ) : null}
+                </button>
+              ) : (
+                <NavLink
+                  key={link.to}
+                  to={link.to}
+                  className={({ isActive }) =>
+                    `relative flex min-w-20 flex-col items-center rounded-lg px-3 py-2 text-xs font-medium transition ${
+                      isActive ? "bg-leaf-50 text-leaf-900" : "text-slate-600 hover:bg-slate-100"
+                    }`
+                  }
+                >
+                  <img src={link.icon} alt="" className="mb-1 h-5 w-5" />
+                  <span>{link.label}</span>
+                  {link.to === "/alerts" && unreadGroupAlertsCount > 0 ? (
+                    <span className="absolute right-2 top-1 rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                      {unreadGroupAlertsCount}
+                    </span>
+                  ) : null}
+                </NavLink>
+              )
             ))}
           </nav>
         </div>
@@ -193,6 +243,16 @@ export function AppShell() {
               >
                 Forms
               </button>
+              <NavLink
+                to="/reservations"
+                className={({ isActive }) =>
+                  `mb-1 block w-full rounded-lg px-3 py-2 text-left text-sm transition ${
+                    isActive ? "bg-leaf-50 text-leaf-900" : "text-slate-600 hover:bg-slate-100"
+                  }`
+                }
+              >
+                Reservations Calendar
+              </NavLink>
             </div>
 
             {boardLinks.map((item) => (
@@ -241,6 +301,7 @@ export function AppShell() {
           onSave={saveProfilePhoto}
         />
       ) : null}
+      <MessagesModal open={messagesOpen} onClose={() => setMessagesOpen(false)} />
     </div>
   );
 }

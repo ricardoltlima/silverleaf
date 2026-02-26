@@ -4,6 +4,7 @@ import com.hoa.silverleaf.common.NotFoundException;
 import com.hoa.silverleaf.feed.dto.CreateFeedPostMediaRequest;
 import com.hoa.silverleaf.feed.dto.FeedCommentReactionResponse;
 import com.hoa.silverleaf.feed.dto.CreateFeedCommentRequest;
+import com.hoa.silverleaf.feed.dto.FeedAuthorServiceResponse;
 import com.hoa.silverleaf.feed.dto.FeedCommentResponse;
 import com.hoa.silverleaf.feed.dto.FeedLikeResponse;
 import com.hoa.silverleaf.feed.dto.CreateFeedPostRequest;
@@ -11,6 +12,7 @@ import com.hoa.silverleaf.feed.dto.FeedReplyCreatedEvent;
 import com.hoa.silverleaf.feed.dto.FeedPageResponse;
 import com.hoa.silverleaf.feed.dto.FeedPostMediaResponse;
 import com.hoa.silverleaf.feed.dto.FeedPostResponse;
+import com.hoa.silverleaf.groups.GroupService;
 import com.hoa.silverleaf.security.AppUserPrincipal;
 import com.hoa.silverleaf.users.UserEntity;
 import com.hoa.silverleaf.users.UserRepository;
@@ -39,6 +41,7 @@ public class FeedService {
     private final FeedCommentReactionRepository feedCommentReactionRepository;
     private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final GroupService groupService;
 
     public FeedService(
             FeedPostRepository feedPostRepository,
@@ -47,7 +50,8 @@ public class FeedService {
             FeedPostCommentRepository feedPostCommentRepository,
             FeedCommentReactionRepository feedCommentReactionRepository,
             UserRepository userRepository,
-            SimpMessagingTemplate messagingTemplate
+            SimpMessagingTemplate messagingTemplate,
+            GroupService groupService
     ) {
         this.feedPostRepository = feedPostRepository;
         this.feedPostMediaRepository = feedPostMediaRepository;
@@ -56,25 +60,71 @@ public class FeedService {
         this.feedCommentReactionRepository = feedCommentReactionRepository;
         this.userRepository = userRepository;
         this.messagingTemplate = messagingTemplate;
+        this.groupService = groupService;
     }
 
     @Transactional(readOnly = true)
-    public FeedPageResponse getFeed(AppUserPrincipal principal, String cursor, int limit, FeedChannel channel) {
+    public FeedPageResponse getFeed(
+            AppUserPrincipal principal,
+            String cursor,
+            int limit,
+            FeedChannel channel,
+            String groupSlug
+    ) {
         // Cursor-based pagination keeps reads stable for infinite-scroll clients.
         int pageSize = Math.max(1, Math.min(limit, 50));
         CursorParts cursorParts = parseCursor(cursor);
         log.debug("Loading feed page pageSize={} cursorCreatedAt={} cursorPostId={}",
                 pageSize, cursorParts.createdAt(), cursorParts.id());
         List<FeedPostEntity> posts;
+        boolean groupedFeed = channel == FeedChannel.GROUP && groupSlug != null && !groupSlug.isBlank();
+        List<String> accessibleGroupSlugs = List.of();
+        if (channel == FeedChannel.GROUP) {
+            accessibleGroupSlugs = groupService.findAccessibleGroupSlugs(principal.getId());
+            if (groupedFeed) {
+                groupService.requireAccessibleGroup(principal.getId(), normalizeGroupSlug(groupSlug));
+            }
+            if (!groupedFeed && accessibleGroupSlugs.isEmpty()) {
+                return new FeedPageResponse(List.of(), null);
+            }
+        }
         if (cursorParts.createdAt() == null || cursorParts.id() == null) {
-            posts = feedPostRepository.findByChannelOrderByCreatedAtDescIdDesc(channel, PageRequest.of(0, pageSize));
+            posts = groupedFeed
+                    ? feedPostRepository.findByChannelAndGroupSlugOrderByCreatedAtDescIdDesc(
+                            channel,
+                            normalizeGroupSlug(groupSlug),
+                            PageRequest.of(0, pageSize)
+                    )
+                    : (channel == FeedChannel.GROUP
+                        ? feedPostRepository.findByChannelAndGroupSlugInOrderByCreatedAtDescIdDesc(
+                                channel,
+                                accessibleGroupSlugs,
+                                PageRequest.of(0, pageSize)
+                        )
+                        : feedPostRepository.findByChannelOrderByCreatedAtDescIdDesc(channel, PageRequest.of(0, pageSize)));
         } else {
-            posts = feedPostRepository.findFeedAfterCursor(
-                    channel,
-                    cursorParts.createdAt(),
-                    cursorParts.id(),
-                    PageRequest.of(0, pageSize)
-            );
+            posts = groupedFeed
+                    ? feedPostRepository.findFeedAfterCursorForGroup(
+                            channel,
+                            normalizeGroupSlug(groupSlug),
+                            cursorParts.createdAt(),
+                            cursorParts.id(),
+                            PageRequest.of(0, pageSize)
+                    )
+                    : (channel == FeedChannel.GROUP
+                        ? feedPostRepository.findFeedAfterCursorForGroupSlugs(
+                                channel,
+                                accessibleGroupSlugs,
+                                cursorParts.createdAt(),
+                                cursorParts.id(),
+                                PageRequest.of(0, pageSize)
+                        )
+                        : feedPostRepository.findFeedAfterCursor(
+                                channel,
+                                cursorParts.createdAt(),
+                                cursorParts.id(),
+                                PageRequest.of(0, pageSize)
+                        ));
         }
 
         Map<Long, List<FeedPostMediaResponse>> mediaByPost = loadMediaByPost(posts);
@@ -101,9 +151,16 @@ public class FeedService {
         String text = request.text() == null ? "" : request.text().trim();
         List<CreateFeedPostMediaRequest> media = request.media() == null ? List.of() : request.media();
         FeedChannel channel = request.channel() == null ? FeedChannel.COMMUNITY : request.channel();
+        String groupSlug = request.groupSlug() == null ? null : normalizeGroupSlug(request.groupSlug());
         if (text.isBlank() && media.isEmpty()) {
             log.warn("Rejected empty post create attempt userId={}", principal.getId());
             throw new IllegalArgumentException("Post must contain text or media");
+        }
+        if (channel == FeedChannel.GROUP && (groupSlug == null || groupSlug.isBlank())) {
+            throw new IllegalArgumentException("Group slug is required for group posts");
+        }
+        if (channel == FeedChannel.GROUP) {
+            groupService.requireAccessibleGroup(principal.getId(), groupSlug);
         }
 
         UserEntity author = userRepository.findById(principal.getId())
@@ -113,6 +170,7 @@ public class FeedService {
         post.setAuthor(author);
         post.setBodyText(text.isBlank() ? null : text);
         post.setChannel(channel);
+        post.setGroupSlug(groupSlug);
         FeedPostEntity savedPost = feedPostRepository.save(post);
 
         List<FeedPostMediaResponse> mediaResponses = new ArrayList<>();
@@ -353,9 +411,11 @@ public class FeedService {
         return new FeedPostResponse(
                 post.getId(),
                 post.getChannel().name(),
+                post.getGroupSlug(),
                 post.getAuthor().getId(),
                 post.getAuthor().getFullName(),
                 post.getAuthor().getPhotoUrl(),
+                toAuthorService(post.getAuthor()),
                 post.getBodyText(),
                 post.getCreatedAt(),
                 media,
@@ -364,6 +424,26 @@ public class FeedService {
                 viewerReaction == null ? null : viewerReaction.name(),
                 comments.size(),
                 comments
+        );
+    }
+
+    private String normalizeGroupSlug(String groupSlug) {
+        return groupSlug == null ? null : groupSlug.trim().toLowerCase();
+    }
+
+    private FeedAuthorServiceResponse toAuthorService(UserEntity author) {
+        if (!author.isServiceEnabled()) {
+            return null;
+        }
+        return new FeedAuthorServiceResponse(
+                author.getServiceTitle(),
+                author.getServiceDescription(),
+                author.getServiceContactPhone(),
+                author.getServiceContactEmail(),
+                author.getServiceBusinessUrl(),
+                author.getServiceHours(),
+                author.getServiceArea(),
+                author.getServiceVisibility() == null ? null : author.getServiceVisibility().name()
         );
     }
 

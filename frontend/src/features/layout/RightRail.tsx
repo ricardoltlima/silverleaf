@@ -9,10 +9,30 @@ type WeatherState = {
 } | null;
 
 const NEWS_ITEMS = [
-  { title: "Pool maintenance this Friday", time: "3h ago" },
-  { title: "Neighborhood watch update", time: "5h ago" },
-  { title: "Garage sale registrations open", time: "9h ago" },
-  { title: "HOA monthly meeting agenda posted", time: "1d ago" }
+  {
+    title: "Pool maintenance this Friday",
+    time: "3h ago",
+    details:
+      "The pool area will be closed Friday from 9:00 AM to 2:00 PM for scheduled cleaning and pump inspection. Please plan accordingly."
+  },
+  {
+    title: "Neighborhood watch update",
+    time: "5h ago",
+    details:
+      "A new neighborhood watch patrol schedule has been published. Volunteers are still welcome for evening rounds on weekends."
+  },
+  {
+    title: "Garage sale registrations open",
+    time: "9h ago",
+    details:
+      "Registrations for this month’s community garage sale are now open. Sellers can reserve spots and publish listings in the Garage Sales section."
+  },
+  {
+    title: "HOA monthly meeting agenda posted",
+    time: "1d ago",
+    details:
+      "The HOA agenda includes landscaping budget updates, clubhouse reservations policy review, and community standards reminders."
+  }
 ];
 
 function weatherLabel(code: number): string {
@@ -44,6 +64,7 @@ export function RightRail() {
   const [weather, setWeather] = useState<WeatherState>(null);
   const [weatherError, setWeatherError] = useState<string>("");
   const [tempUnit, setTempUnit] = useState<"F" | "C">("F");
+  const [selectedNews, setSelectedNews] = useState<(typeof NEWS_ITEMS)[number] | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -97,10 +118,15 @@ export function RightRail() {
         <h3 className="mb-3 text-lg font-semibold text-slate-900">Silverleaf News</h3>
         <div className="space-y-3">
           {NEWS_ITEMS.map((item) => (
-            <div key={item.title} className="border-b border-slate-100 pb-2 last:border-b-0">
-              <p className="text-sm font-medium text-slate-800">{item.title}</p>
+            <button
+              key={item.title}
+              type="button"
+              onClick={() => setSelectedNews(item)}
+              className="w-full border-b border-slate-100 pb-2 text-left last:border-b-0"
+            >
+              <p className="text-sm font-medium text-slate-800 hover:underline">{item.title}</p>
               <p className="text-xs text-slate-500">{item.time}</p>
-            </div>
+            </button>
           ))}
         </div>
       </section>
@@ -138,6 +164,33 @@ export function RightRail() {
           <p className="text-sm text-slate-500">{weatherError || "Loading weather..."}</p>
         )}
       </section>
+
+      {selectedNews ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setSelectedNews(null)}
+        >
+          <div
+            className="w-[min(640px,96vw)] rounded-2xl bg-white p-4 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-2 flex items-start justify-between gap-3">
+              <h4 className="text-lg font-semibold text-slate-900">{selectedNews.title}</h4>
+              <button
+                type="button"
+                onClick={() => setSelectedNews(null)}
+                className="rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-700 hover:bg-slate-100"
+              >
+                Close
+              </button>
+            </div>
+            <p className="mb-3 text-xs text-slate-500">{selectedNews.time}</p>
+            <p className="text-sm leading-6 text-slate-700">{selectedNews.details}</p>
+          </div>
+        </div>
+      ) : null}
     </aside>
   );
 }

@@ -9,6 +9,7 @@ import java.util.List;
 public record CreateFeedPostRequest(
         @Size(max = 4000) String text,
         @Valid List<CreateFeedPostMediaRequest> media,
-        FeedChannel channel
+        FeedChannel channel,
+        @Size(max = 80) String groupSlug
 ) {
 }

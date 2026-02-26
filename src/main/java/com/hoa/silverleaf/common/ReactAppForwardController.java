@@ -19,12 +19,12 @@ public class ReactAppForwardController {
             "/app/garage-sales/",
             "/app/alerts",
             "/app/alerts/",
+            "/app/groups",
+            "/app/groups/",
             "/app/reservations",
             "/app/reservations/",
             "/app/profile",
             "/app/profile/",
-            "/app/map",
-            "/app/map/",
             "/app/messages",
             "/app/messages/"
     })

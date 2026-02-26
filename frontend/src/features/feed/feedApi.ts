@@ -12,7 +12,8 @@ import type {
 type CreatePostPayload = {
   text: string;
   media: FeedMedia[];
-  channel?: "COMMUNITY" | "SERVICES";
+  channel?: "COMMUNITY" | "SERVICES" | "GROUP";
+  groupSlug?: string;
 };
 
 type UploadMediaResponse = {
@@ -20,8 +21,15 @@ type UploadMediaResponse = {
   url: string;
 };
 
-export function fetchFeed(limit = 20, channel: "COMMUNITY" | "SERVICES" = "COMMUNITY") {
-  return apiClient<FeedPageResponse>(`/api/v1/feed?limit=${limit}&channel=${channel}`);
+export function fetchFeed(
+  limit = 20,
+  channel: "COMMUNITY" | "SERVICES" | "GROUP" = "COMMUNITY",
+  groupSlug?: string,
+  cursor?: string
+) {
+  const groupQuery = groupSlug ? `&groupSlug=${encodeURIComponent(groupSlug)}` : "";
+  const cursorQuery = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
+  return apiClient<FeedPageResponse>(`/api/v1/feed?limit=${limit}&channel=${channel}${groupQuery}${cursorQuery}`);
 }
 
 export function createFeedPost(payload: CreatePostPayload) {

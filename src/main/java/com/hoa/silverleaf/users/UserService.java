@@ -10,6 +10,7 @@ import com.hoa.silverleaf.users.dto.AddHouseholdMemberRequest;
 import com.hoa.silverleaf.users.dto.CreateResidentRequest;
 import com.hoa.silverleaf.users.dto.HouseholdResponse;
 import com.hoa.silverleaf.users.dto.MeResponse;
+import com.hoa.silverleaf.users.dto.MyProfileResponse;
 import com.hoa.silverleaf.users.dto.ResidentResponse;
 import com.hoa.silverleaf.users.dto.UpdateMyProfileRequest;
 import com.hoa.silverleaf.users.dto.UpdateResidentRequest;
@@ -52,13 +53,9 @@ public class UserService {
     public MeResponse me() {
         AppUserPrincipal principal = requirePrincipal();
         log.debug("Authenticated principal resolved. userId={}, email={}", principal.getId(), principal.getUsername());
-        return new MeResponse(
-                principal.getId(),
-                principal.getUsername(),
-                principal.getFullName(),
-                principal.getRole(),
-                userRepository.findById(principal.getId()).map(UserEntity::getPhotoUrl).orElse(null)
-        );
+        UserEntity user = userRepository.findById(principal.getId())
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        return new MeResponse(user.getId(), user.getEmail(), user.getFullName(), user.getRole(), user.getPhotoUrl());
     }
 
     @Transactional(readOnly = true)
@@ -173,19 +170,51 @@ public class UserService {
     }
 
     @Transactional
-    public MeResponse updateMyProfile(UpdateMyProfileRequest request) {
+    public MyProfileResponse getMyProfile() {
+        AppUserPrincipal principal = requirePrincipal();
+        UserEntity user = userRepository.findById(principal.getId())
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        String address = houseResidentRepository.findFirstByEmailIgnoreCaseOrderByIdDesc(user.getEmail())
+                .map(entry -> entry.getHouse().getAddress())
+                .orElse(null);
+        return toMyProfileResponse(user, address);
+    }
+
+    @Transactional
+    public MyProfileResponse updateMyProfile(UpdateMyProfileRequest request) {
         AppUserPrincipal principal = requirePrincipal();
         UserEntity user = userRepository.findById(principal.getId())
                 .orElseThrow(() -> new NotFoundException("User not found"));
 
+        String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
+        if (!user.getEmail().equalsIgnoreCase(normalizedEmail) && userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
+            log.warn("Self profile update rejected due to duplicated email={} userId={}", normalizedEmail, user.getId());
+            throw new IllegalArgumentException("Email already registered");
+        }
+
         user.setFullName(request.fullName().trim());
+        user.setEmail(normalizedEmail);
+        user.setPhoneNumber(trimToNull(request.phoneNumber()));
         if (request.password() != null && !request.password().isBlank()) {
             user.setPasswordHash(passwordEncoder.encode(request.password()));
             log.info("Self-service password updated userId={}", user.getId());
         }
+        user.setServiceEnabled(request.serviceEnabled());
+        user.setServiceTitle(trimToNull(request.serviceTitle()));
+        user.setServiceDescription(trimToNull(request.serviceDescription()));
+        user.setServiceContactPhone(trimToNull(request.serviceContactPhone()));
+        user.setServiceContactEmail(trimToNull(request.serviceContactEmail()));
+        user.setServiceBusinessUrl(trimToNull(request.serviceBusinessUrl()));
+        user.setServiceHours(trimToNull(request.serviceHours()));
+        user.setServiceArea(trimToNull(request.serviceArea()));
+        user.setServiceVisibility(parseVisibility(request.serviceVisibility()));
+
         UserEntity saved = userRepository.save(user);
         log.info("Self-service profile updated userId={}", saved.getId());
-        return new MeResponse(saved.getId(), saved.getEmail(), saved.getFullName(), saved.getRole(), saved.getPhotoUrl());
+        String address = houseResidentRepository.findFirstByEmailIgnoreCaseOrderByIdDesc(saved.getEmail())
+                .map(entry -> entry.getHouse().getAddress())
+                .orElse(null);
+        return toMyProfileResponse(saved, address);
     }
 
     @Transactional
@@ -264,6 +293,46 @@ public class UserService {
                 .map(r -> new HouseResidentResponse(r.getId(), r.getResident().getFullName(), r.getResident().getEmail()))
                 .toList();
         return new HouseholdResponse(house.getId(), house.getAddress(), house.getStatus(), residents);
+    }
+
+    private MyProfileResponse toMyProfileResponse(UserEntity user, String address) {
+        return new MyProfileResponse(
+                user.getId(),
+                user.getEmail(),
+                user.getFullName(),
+                user.getPhotoUrl(),
+                user.getPhoneNumber(),
+                address,
+                user.isServiceEnabled(),
+                user.getServiceTitle(),
+                user.getServiceDescription(),
+                user.getServiceContactPhone(),
+                user.getServiceContactEmail(),
+                user.getServiceBusinessUrl(),
+                user.getServiceHours(),
+                user.getServiceArea(),
+                user.getServiceVisibility() == null ? ServiceVisibility.PUBLIC.name() : user.getServiceVisibility().name()
+        );
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private ServiceVisibility parseVisibility(String rawVisibility) {
+        if (rawVisibility == null || rawVisibility.isBlank()) {
+            return ServiceVisibility.PUBLIC;
+        }
+        try {
+            return ServiceVisibility.valueOf(rawVisibility.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ignored) {
+            log.warn("Unknown service visibility provided rawVisibility={}, defaulting to PUBLIC", rawVisibility);
+            return ServiceVisibility.PUBLIC;
+        }
     }
 
     private AppUserPrincipal requirePrincipal() {

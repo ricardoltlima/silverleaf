@@ -1,27 +1,456 @@
-import { SectionFeedPage } from "@/features/sections/SectionFeedPage";
+import { FormEvent, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { MediaCarousel } from "@/features/layout/MediaCarousel";
+import type { FeedMedia } from "@/features/feed/types";
+import { uploadFeedMedia } from "@/features/feed/feedApi";
+import { fetchCurrentUser } from "@/features/users/currentUserApi";
+import { sendMessage } from "@/features/messages/messagesApi";
+import {
+  createGarageSaleItem,
+  fetchGarageSaleItems,
+  type GarageSaleItem
+} from "@/features/sections/garageSalesApi";
 
-const items = [
-  {
-    id: "gs-1",
-    title: "Saturday Garage Sale - 18 Palm Court",
-    summary: "Furniture, toys, and home decor from 8:00 AM to 12:00 PM.",
-    meta: "This Saturday"
-  },
-  {
-    id: "gs-2",
-    title: "Neighborhood Multi-Family Sale",
-    summary: "Three families joining at Silverleaf Lane. Early access at 7:30 AM.",
-    meta: "Next week"
-  }
-];
+const GARAGE_SALE_CATEGORIES = [
+  "Vehicles",
+  "Classified",
+  "Clothing",
+  "Eletronics",
+  "Entertainment",
+  "Family",
+  "Free",
+  "Garden and Outdoor",
+  "Hobbies",
+  "Home Goods",
+  "Musical Instruments",
+  "Pets",
+  "Sporting Goods",
+  "Toys and Games"
+] as const;
+
+type GarageSaleCategory = (typeof GARAGE_SALE_CATEGORIES)[number];
+type SortOption = "NEWEST" | "PRICE_LOW_HIGH" | "PRICE_HIGH_LOW" | "TITLE_A_Z";
+
+const GARAGE_SALES_QUERY_KEY = ["garage-sales"];
 
 export function GarageSalesPage() {
+  const queryClient = useQueryClient();
+  const itemsQuery = useQuery({
+    queryKey: GARAGE_SALES_QUERY_KEY,
+    queryFn: fetchGarageSaleItems,
+    staleTime: 30_000
+  });
+  const createItemMutation = useMutation({
+    mutationFn: createGarageSaleItem,
+    onSuccess: (created) => {
+      queryClient.setQueryData<GarageSaleItem[]>(GARAGE_SALES_QUERY_KEY, (current) => [created, ...(current ?? [])]);
+    }
+  });
+  const meQuery = useQuery({
+    queryKey: ["me"],
+    queryFn: fetchCurrentUser
+  });
+  const sendMessageMutation = useMutation({
+    mutationFn: ({ recipientUserId, body }: { recipientUserId: number; body: string }) =>
+      sendMessage(recipientUserId, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["messages", "conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["messages", "unread-count"] });
+      setMessageToSeller("");
+    }
+  });
+  const mediaUploadMutation = useMutation({
+    mutationFn: uploadFeedMedia
+  });
+
+  const [activeCategory, setActiveCategory] = useState<GarageSaleCategory | "ALL">("ALL");
+  const [sortBy, setSortBy] = useState<SortOption>("NEWEST");
+  const [selectedItem, setSelectedItem] = useState<GarageSaleItem | null>(null);
+  const [sellOpen, setSellOpen] = useState(false);
+  const [formTitle, setFormTitle] = useState("");
+  const [formPrice, setFormPrice] = useState("");
+  const [formCondition, setFormCondition] = useState("Used - Good");
+  const [formCategory, setFormCategory] = useState<GarageSaleCategory>("Classified");
+  const [formDescription, setFormDescription] = useState("");
+  const [formMedia, setFormMedia] = useState<FeedMedia[]>([]);
+  const [messageToSeller, setMessageToSeller] = useState("");
+
+  const visibleItems = useMemo(() => {
+    const items = itemsQuery.data ?? [];
+    const filtered =
+      activeCategory === "ALL" ? [...items] : items.filter((item) => item.category === activeCategory);
+
+    const toPriceNumber = (value: string) => {
+      const parsed = Number(value.replace(/[^0-9.]/g, ""));
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    switch (sortBy) {
+      case "PRICE_LOW_HIGH":
+        return filtered.sort((a, b) => toPriceNumber(a.price) - toPriceNumber(b.price));
+      case "PRICE_HIGH_LOW":
+        return filtered.sort((a, b) => toPriceNumber(b.price) - toPriceNumber(a.price));
+      case "TITLE_A_Z":
+        return filtered.sort((a, b) => a.title.localeCompare(b.title));
+      case "NEWEST":
+      default:
+        return filtered;
+    }
+  }, [activeCategory, itemsQuery.data, sortBy]);
+
+  const hasItems = visibleItems.length > 0;
+
+  const onCreateProduct = (event: FormEvent) => {
+    event.preventDefault();
+    if (!formTitle.trim() || !formPrice.trim()) return;
+    createItemMutation.mutate(
+      {
+        title: formTitle.trim(),
+        price: formPrice.trim(),
+        condition: formCondition.trim(),
+        category: formCategory,
+        description: formDescription.trim() || null,
+        media: formMedia
+      },
+      {
+        onSuccess: () => {
+          setSellOpen(false);
+          setFormTitle("");
+          setFormPrice("");
+          setFormCondition("Used - Good");
+          setFormCategory("Classified");
+          setFormDescription("");
+          setFormMedia([]);
+        }
+      }
+    );
+  };
+
+  const onMediaSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    if (files.length === 0) return;
+    const uploaded: FeedMedia[] = [];
+    for (const file of files) {
+      const result = await mediaUploadMutation.mutateAsync(file);
+      uploaded.push({ type: result.type, url: result.url });
+    }
+    setFormMedia((current) => [...current, ...uploaded]);
+    event.target.value = "";
+  };
+
   return (
-    <SectionFeedPage
-      heading="Garage Sales"
-      description="Upcoming and active garage sale posts from residents."
-      accentClass="bg-amber-100 text-amber-800"
-      items={items}
-    />
+    <div className="space-y-4">
+      <section className="card p-4">
+        <div className="mb-2 inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+          Garage Sales
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900">Community Marketplace</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Browse neighbor listings and post items you want to sell.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSellOpen(true)}
+            className="rounded-lg bg-leaf-600 px-4 py-2 text-sm font-medium text-white hover:bg-leaf-700"
+          >
+            Sell a product
+          </button>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveCategory("ALL")}
+            className={`rounded-full border px-3 py-1 text-xs font-medium ${
+              activeCategory === "ALL"
+                ? "border-leaf-600 bg-leaf-50 text-leaf-900"
+                : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+            }`}
+          >
+            All
+          </button>
+          {GARAGE_SALE_CATEGORIES.map((category) => (
+            <button
+              key={category}
+              type="button"
+              onClick={() => setActiveCategory(category)}
+              className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                activeCategory === category
+                  ? "border-leaf-600 bg-leaf-50 text-leaf-900"
+                  : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+              }`}
+            >
+              {category}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-3">
+          <select
+            value={sortBy}
+            onChange={(event) => setSortBy(event.target.value as SortOption)}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-leaf-600 focus:ring-2 md:w-[260px]"
+          >
+            <option value="NEWEST">Sort: Newest</option>
+            <option value="PRICE_LOW_HIGH">Sort: Price low to high</option>
+            <option value="PRICE_HIGH_LOW">Sort: Price high to low</option>
+            <option value="TITLE_A_Z">Sort: Title A-Z</option>
+          </select>
+        </div>
+      </section>
+
+      {itemsQuery.isLoading ? <section className="card p-4 text-sm text-slate-600">Loading listings...</section> : null}
+      {itemsQuery.isError ? (
+        <section className="card p-4 text-sm text-red-600">{(itemsQuery.error as Error).message}</section>
+      ) : null}
+
+      {hasItems ? (
+        <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+          {visibleItems.map((item) => {
+            const cover = item.media[0];
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setSelectedItem(item)}
+                className="group overflow-hidden rounded-xl border border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <div className="aspect-square overflow-hidden bg-slate-100">
+                  {cover?.type === "IMAGE" || cover?.type === "VIDEO" ? (
+                    <img
+                      src={cover.url}
+                      alt={item.title}
+                      className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">
+                      No photo
+                    </div>
+                  )}
+                </div>
+                <div className="p-2">
+                  <p className="truncate text-sm font-semibold text-slate-900">{item.title}</p>
+                  <p className="text-sm font-bold text-leaf-700">{item.price}</p>
+                  <p className="truncate text-xs text-slate-500">{item.condition}</p>
+                </div>
+              </button>
+            );
+          })}
+        </section>
+      ) : (
+        <section className="card p-4 text-sm text-slate-600">
+          No products in this filter. Click <strong>Sell a product</strong> to create a listing.
+        </section>
+      )}
+
+      {selectedItem ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setSelectedItem(null)}
+        >
+          <div
+            className="max-h-[90vh] w-[min(880px,96vw)] overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-xl font-semibold text-slate-900">{selectedItem.title}</h3>
+                <p className="text-lg font-bold text-leaf-700">{selectedItem.price}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedItem(null)}
+                className="rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-700 hover:bg-slate-100"
+              >
+                Close
+              </button>
+            </div>
+
+            {selectedItem.media.length > 0 ? (
+              <MediaCarousel media={selectedItem.media} />
+            ) : (
+              <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
+                No media attached
+              </div>
+            )}
+
+            <div className="grid gap-2 text-sm text-slate-700 md:grid-cols-2">
+              <p>
+                <span className="font-semibold text-slate-900">Condition:</span> {selectedItem.condition}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-900">Category:</span> {selectedItem.category}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-900">Seller:</span> {selectedItem.sellerName}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-900">Contact:</span>{" "}
+                {selectedItem.sellerPhone || selectedItem.sellerEmail}
+              </p>
+            </div>
+            <p className="mt-3 text-sm text-slate-700">{selectedItem.description || "No description provided."}</p>
+
+            {selectedItem.sellerUserId !== meQuery.data?.id ? (
+              <form
+                className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const text = messageToSeller.trim();
+                  if (!text) return;
+                  sendMessageMutation.mutate({
+                    recipientUserId: selectedItem.sellerUserId,
+                    body: text
+                  });
+                }}
+              >
+                <p className="mb-2 text-sm font-semibold text-slate-900">Message seller</p>
+                <textarea
+                  value={messageToSeller}
+                  onChange={(event) => setMessageToSeller(event.target.value)}
+                  rows={3}
+                  placeholder="Hi, is this item still available?"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-leaf-600 focus:ring-2"
+                />
+                <div className="mt-2 flex items-center justify-end gap-2">
+                  {sendMessageMutation.isError ? (
+                    <span className="text-xs text-red-600">{(sendMessageMutation.error as Error).message}</span>
+                  ) : null}
+                  <button
+                    type="submit"
+                    disabled={sendMessageMutation.isPending}
+                    className="rounded-lg bg-leaf-600 px-3 py-2 text-xs font-medium text-white hover:bg-leaf-700 disabled:opacity-70"
+                  >
+                    Send message
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <p className="mt-4 text-xs text-slate-500">This is your listing.</p>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {sellOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setSellOpen(false)}
+        >
+          <form
+            onSubmit={onCreateProduct}
+            className="w-[min(760px,96vw)] rounded-2xl bg-white p-4 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-slate-900">Sell a product</h3>
+              <button
+                type="button"
+                onClick={() => setSellOpen(false)}
+                className="rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-700 hover:bg-slate-100"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="text-sm md:col-span-2">
+                <span className="mb-1 block text-slate-600">Product title</span>
+                <input
+                  value={formTitle}
+                  onChange={(event) => setFormTitle(event.target.value)}
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-leaf-600 focus:ring-2"
+                />
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-slate-600">Price</span>
+                <input
+                  value={formPrice}
+                  onChange={(event) => setFormPrice(event.target.value)}
+                  placeholder="$120"
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-leaf-600 focus:ring-2"
+                />
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-slate-600">Condition</span>
+                <select
+                  value={formCondition}
+                  onChange={(event) => setFormCondition(event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-leaf-600 focus:ring-2"
+                >
+                  <option>Used - Like New</option>
+                  <option>Used - Excellent</option>
+                  <option>Used - Good</option>
+                  <option>Used - Fair</option>
+                  <option>New</option>
+                </select>
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-slate-600">Category</span>
+                <select
+                  value={formCategory}
+                  onChange={(event) => setFormCategory(event.target.value as GarageSaleCategory)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-leaf-600 focus:ring-2"
+                >
+                  {GARAGE_SALE_CATEGORIES.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm md:col-span-2">
+                <span className="mb-1 block text-slate-600">Description</span>
+                <textarea
+                  value={formDescription}
+                  onChange={(event) => setFormDescription(event.target.value)}
+                  rows={3}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-leaf-600 focus:ring-2"
+                />
+              </label>
+              <label className="text-sm md:col-span-2">
+                <span className="mb-1 block text-slate-600">Photos / Videos</span>
+                <input
+                  type="file"
+                  accept="image/*,video/*"
+                  multiple
+                  onChange={onMediaSelected}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+                {formMedia.length > 0 ? (
+                  <p className="mt-1 text-xs text-slate-500">{formMedia.length} media item(s) uploaded</p>
+                ) : null}
+              </label>
+            </div>
+
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setSellOpen(false)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={createItemMutation.isPending}
+                className="rounded-lg bg-leaf-600 px-4 py-2 text-sm font-medium text-white hover:bg-leaf-700 disabled:opacity-70"
+              >
+                Publish listing
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+    </div>
   );
 }

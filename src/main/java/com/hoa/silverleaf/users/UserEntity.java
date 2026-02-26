@@ -26,6 +26,37 @@ public class UserEntity {
     @Column(name = "photo_url", length = 500)
     private String photoUrl;
 
+    @Column(name = "phone_number", length = 40)
+    private String phoneNumber;
+
+    @Column(name = "service_enabled", nullable = false)
+    private boolean serviceEnabled;
+
+    @Column(name = "service_title", length = 140)
+    private String serviceTitle;
+
+    @Column(name = "service_description")
+    private String serviceDescription;
+
+    @Column(name = "service_contact_phone", length = 40)
+    private String serviceContactPhone;
+
+    @Column(name = "service_contact_email", length = 320)
+    private String serviceContactEmail;
+
+    @Column(name = "service_business_url", length = 500)
+    private String serviceBusinessUrl;
+
+    @Column(name = "service_hours", length = 160)
+    private String serviceHours;
+
+    @Column(name = "service_area", length = 160)
+    private String serviceArea;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "service_visibility", nullable = false, length = 30)
+    private ServiceVisibility serviceVisibility = ServiceVisibility.PUBLIC;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private UserRole role;
@@ -75,6 +106,86 @@ public class UserEntity {
 
     public void setPhotoUrl(String photoUrl) {
         this.photoUrl = photoUrl;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
+    }
+
+    public boolean isServiceEnabled() {
+        return serviceEnabled;
+    }
+
+    public void setServiceEnabled(boolean serviceEnabled) {
+        this.serviceEnabled = serviceEnabled;
+    }
+
+    public String getServiceTitle() {
+        return serviceTitle;
+    }
+
+    public void setServiceTitle(String serviceTitle) {
+        this.serviceTitle = serviceTitle;
+    }
+
+    public String getServiceDescription() {
+        return serviceDescription;
+    }
+
+    public void setServiceDescription(String serviceDescription) {
+        this.serviceDescription = serviceDescription;
+    }
+
+    public String getServiceContactPhone() {
+        return serviceContactPhone;
+    }
+
+    public void setServiceContactPhone(String serviceContactPhone) {
+        this.serviceContactPhone = serviceContactPhone;
+    }
+
+    public String getServiceContactEmail() {
+        return serviceContactEmail;
+    }
+
+    public void setServiceContactEmail(String serviceContactEmail) {
+        this.serviceContactEmail = serviceContactEmail;
+    }
+
+    public String getServiceBusinessUrl() {
+        return serviceBusinessUrl;
+    }
+
+    public void setServiceBusinessUrl(String serviceBusinessUrl) {
+        this.serviceBusinessUrl = serviceBusinessUrl;
+    }
+
+    public String getServiceHours() {
+        return serviceHours;
+    }
+
+    public void setServiceHours(String serviceHours) {
+        this.serviceHours = serviceHours;
+    }
+
+    public String getServiceArea() {
+        return serviceArea;
+    }
+
+    public void setServiceArea(String serviceArea) {
+        this.serviceArea = serviceArea;
+    }
+
+    public ServiceVisibility getServiceVisibility() {
+        return serviceVisibility;
+    }
+
+    public void setServiceVisibility(ServiceVisibility serviceVisibility) {
+        this.serviceVisibility = serviceVisibility;
     }
 
     public UserRole getRole() {

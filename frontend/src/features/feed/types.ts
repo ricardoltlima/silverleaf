@@ -21,10 +21,21 @@ export type FeedComment = {
 
 export type FeedPost = {
   id: number;
-  channel?: "COMMUNITY" | "SERVICES";
+  channel?: "COMMUNITY" | "SERVICES" | "GROUP";
+  groupSlug?: string | null;
   authorUserId: number;
   authorName: string;
   authorPhotoUrl?: string | null;
+  authorService?: {
+    title: string | null;
+    description: string | null;
+    contactPhone: string | null;
+    contactEmail: string | null;
+    businessUrl: string | null;
+    hours: string | null;
+    serviceArea: string | null;
+    visibility: "PUBLIC" | "GROUPS" | null;
+  } | null;
   text: string | null;
   createdAt: string;
   media: FeedMedia[];

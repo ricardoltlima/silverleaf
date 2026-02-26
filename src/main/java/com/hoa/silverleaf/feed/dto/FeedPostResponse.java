@@ -7,9 +7,11 @@ import java.util.Map;
 public record FeedPostResponse(
         Long id,
         String channel,
+        String groupSlug,
         Long authorUserId,
         String authorName,
         String authorPhotoUrl,
+        FeedAuthorServiceResponse authorService,
         String text,
         Instant createdAt,
         List<FeedPostMediaResponse> media,

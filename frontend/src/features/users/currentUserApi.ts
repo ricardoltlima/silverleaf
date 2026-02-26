@@ -9,6 +9,40 @@ export type CurrentUser = {
   photoUrl: string | null;
 };
 
+export type MyProfile = {
+  id: number;
+  email: string;
+  fullName: string;
+  photoUrl: string | null;
+  phoneNumber: string | null;
+  address: string | null;
+  serviceEnabled: boolean;
+  serviceTitle: string | null;
+  serviceDescription: string | null;
+  serviceContactPhone: string | null;
+  serviceContactEmail: string | null;
+  serviceBusinessUrl: string | null;
+  serviceHours: string | null;
+  serviceArea: string | null;
+  serviceVisibility: "PUBLIC" | "GROUPS";
+};
+
+export type UpdateMyProfilePayload = {
+  fullName: string;
+  email: string;
+  phoneNumber: string | null;
+  password: string | null;
+  serviceEnabled: boolean;
+  serviceTitle: string | null;
+  serviceDescription: string | null;
+  serviceContactPhone: string | null;
+  serviceContactEmail: string | null;
+  serviceBusinessUrl: string | null;
+  serviceHours: string | null;
+  serviceArea: string | null;
+  serviceVisibility: "PUBLIC" | "GROUPS";
+};
+
 export type MyHousehold = {
   houseId: number;
   houseAddress: string;
@@ -18,6 +52,17 @@ export type MyHousehold = {
 
 export function fetchCurrentUser() {
   return apiClient<CurrentUser>("/api/v1/me");
+}
+
+export function fetchMyProfile() {
+  return apiClient<MyProfile>("/api/v1/me/profile");
+}
+
+export function updateMyProfile(payload: UpdateMyProfilePayload) {
+  return apiClient<MyProfile>("/api/v1/me/profile", {
+    method: "PUT",
+    body: payload
+  });
 }
 
 export function fetchMyHousehold() {

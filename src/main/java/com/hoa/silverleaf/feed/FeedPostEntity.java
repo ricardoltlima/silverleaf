@@ -36,6 +36,9 @@ public class FeedPostEntity {
     @Column(name = "channel", nullable = false, length = 30)
     private FeedChannel channel = FeedChannel.COMMUNITY;
 
+    @Column(name = "group_slug", length = 80)
+    private String groupSlug;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -74,5 +77,13 @@ public class FeedPostEntity {
 
     public void setChannel(FeedChannel channel) {
         this.channel = channel;
+    }
+
+    public String getGroupSlug() {
+        return groupSlug;
+    }
+
+    public void setGroupSlug(String groupSlug) {
+        this.groupSlug = groupSlug;
     }
 }
