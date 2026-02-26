@@ -1,3 +1,5 @@
+import org.gradle.internal.os.OperatingSystem
+
 plugins {
     id 'java'
     id 'org.springframework.boot' version '3.5.0'
@@ -25,6 +27,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-security'
     // Bean/request validation annotations and runtime validators.
     implementation 'org.springframework.boot:spring-boot-starter-validation'
+    // STOMP + SockJS WebSocket messaging for real-time feed updates.
+    implementation 'org.springframework.boot:spring-boot-starter-websocket'
     // JPA, repositories, transaction handling.
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     // Outbound email support for onboarding verification links.
@@ -66,4 +70,41 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+}
+
+def frontendDir = file("$projectDir/frontend")
+def isWindows = OperatingSystem.current().isWindows()
+def npmExec = isWindows ? "npm.cmd" : "npm"
+
+tasks.register('npmInstall', Exec) {
+    workingDir frontendDir
+    commandLine npmExec, "install"
+    inputs.files(file("$frontendDir/package.json"), file("$frontendDir/package-lock.json"))
+    outputs.dir(file("$frontendDir/node_modules"))
+}
+
+tasks.register('npmBuild', Exec) {
+    dependsOn tasks.named('npmInstall')
+    workingDir frontendDir
+    commandLine npmExec, "run", "build"
+    inputs.dir(file("$frontendDir/src"))
+    inputs.files(
+            file("$frontendDir/index.html"),
+            file("$frontendDir/package.json"),
+            file("$frontendDir/package-lock.json"),
+            file("$frontendDir/tailwind.config.ts"),
+            file("$frontendDir/vite.config.ts"),
+            file("$frontendDir/tsconfig.json")
+    )
+    outputs.dir(file("$frontendDir/dist"))
+}
+
+tasks.register('copyFrontendToStatic', Copy) {
+    dependsOn tasks.named('npmBuild')
+    from(file("$frontendDir/dist"))
+    into(file("$buildDir/resources/main/static/app"))
+}
+
+tasks.named('processResources') {
+    dependsOn tasks.named('copyFrontendToStatic')
 }

@@ -22,8 +22,11 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Locale;
+import java.time.Instant;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -32,15 +35,18 @@ public class UserService {
     private final UserRepository userRepository;
     private final HouseResidentRepository houseResidentRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ProfilePhotoStorageService profilePhotoStorageService;
 
     public UserService(
             UserRepository userRepository,
             HouseResidentRepository houseResidentRepository,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            ProfilePhotoStorageService profilePhotoStorageService
     ) {
         this.userRepository = userRepository;
         this.houseResidentRepository = houseResidentRepository;
         this.passwordEncoder = passwordEncoder;
+        this.profilePhotoStorageService = profilePhotoStorageService;
     }
 
     public MeResponse me() {
@@ -50,7 +56,8 @@ public class UserService {
                 principal.getId(),
                 principal.getUsername(),
                 principal.getFullName(),
-                principal.getRole()
+                principal.getRole(),
+                userRepository.findById(principal.getId()).map(UserEntity::getPhotoUrl).orElse(null)
         );
     }
 
@@ -178,15 +185,33 @@ public class UserService {
         }
         UserEntity saved = userRepository.save(user);
         log.info("Self-service profile updated userId={}", saved.getId());
-        return new MeResponse(saved.getId(), saved.getEmail(), saved.getFullName(), saved.getRole());
+        return new MeResponse(saved.getId(), saved.getEmail(), saved.getFullName(), saved.getRole(), saved.getPhotoUrl());
+    }
+
+    @Transactional
+    public MeResponse updateMyPhoto(MultipartFile file) {
+        AppUserPrincipal principal = requirePrincipal();
+        UserEntity user = userRepository.findById(principal.getId())
+                .orElseThrow(() -> new NotFoundException("User not found"));
+
+        String oldPhotoUrl = user.getPhotoUrl();
+        String storedPhotoUrl = profilePhotoStorageService.saveProfilePhoto(file);
+        user.setPhotoUrl(storedPhotoUrl);
+        UserEntity saved = userRepository.save(user);
+        profilePhotoStorageService.deleteIfLocal(oldPhotoUrl);
+        log.info("Self-service profile photo updated userId={} photoUrl={}", saved.getId(), saved.getPhotoUrl());
+        return new MeResponse(saved.getId(), saved.getEmail(), saved.getFullName(), saved.getRole(), saved.getPhotoUrl());
     }
 
     @Transactional(readOnly = true)
     public HouseholdResponse getMyHousehold() {
         AppUserPrincipal principal = requirePrincipal();
-        HouseResidentEntity me = houseResidentRepository.findFirstByEmailIgnoreCaseOrderByIdDesc(principal.getUsername())
-                .orElseThrow(() -> new NotFoundException("No household found for this resident"));
-        return toHouseholdResponse(me.getHouse());
+        return houseResidentRepository.findFirstByEmailIgnoreCaseOrderByIdDesc(principal.getUsername())
+                .map(me -> toHouseholdResponse(me.getHouse()))
+                .orElseGet(() -> {
+                    log.debug("No household linked for user email={}, returning empty household response", principal.getUsername());
+                    return new HouseholdResponse(null, null, com.hoa.silverleaf.houses.HouseStatus.UNKNOWN, List.of());
+                });
     }
 
     @Transactional
@@ -204,16 +229,39 @@ public class UserService {
 
         HouseResidentEntity resident = new HouseResidentEntity();
         resident.setHouse(house);
-        resident.setFullName(request.fullName().trim());
-        resident.setEmail(normalizedEmail);
+        resident.setResident(ensureResidentUserExists(normalizedEmail, request.fullName().trim()));
+        resident.setActive(true);
+        resident.setMovedInAt(Instant.now());
         houseResidentRepository.save(resident);
         log.info("Household member added houseId={} email={}", house.getId(), normalizedEmail);
         return toHouseholdResponse(house);
     }
 
+    private UserEntity ensureResidentUserExists(String normalizedEmail, String fullName) {
+        return userRepository.findByEmailIgnoreCase(normalizedEmail).map(existingUser -> {
+            if (!existingUser.getFullName().equals(fullName.trim())) {
+                existingUser.setFullName(fullName.trim());
+                existingUser = userRepository.save(existingUser);
+                log.info("Synced app_user fullName from household member email={}", normalizedEmail);
+            }
+            return existingUser;
+        }).orElseGet(() -> {
+            UserEntity user = new UserEntity();
+            user.setEmail(normalizedEmail);
+            user.setFullName(fullName.trim());
+            // Household members added by residents may not have passwords yet; store random placeholder hash.
+            user.setPasswordHash(passwordEncoder.encode(java.util.UUID.randomUUID().toString()));
+            user.setRole(UserRole.RESIDENT);
+            user.setEnabled(true);
+            UserEntity saved = userRepository.save(user);
+            log.info("Created app_user for household member email={}", normalizedEmail);
+            return saved;
+        });
+    }
+
     private HouseholdResponse toHouseholdResponse(HouseEntity house) {
         var residents = houseResidentRepository.findByHouseIdOrderByIdAsc(house.getId()).stream()
-                .map(r -> new HouseResidentResponse(r.getId(), r.getFullName(), r.getEmail()))
+                .map(r -> new HouseResidentResponse(r.getId(), r.getResident().getFullName(), r.getResident().getEmail()))
                 .toList();
         return new HouseholdResponse(house.getId(), house.getAddress(), house.getStatus(), residents);
     }

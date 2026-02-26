@@ -43,3 +43,7 @@ infra/aws-cdk/node_modules/
 infra/aws-cdk/dist/
 infra/aws-cdk/cdk.out/
 infra/aws-cdk/cdk.context.json
+
+# Frontend local artifacts
+frontend/node_modules/
+frontend/dist/

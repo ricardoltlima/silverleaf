@@ -77,8 +77,8 @@ public class HouseService {
                 .stream()
                 .map(resident -> new HouseResidentResponse(
                         resident.getId(),
-                        resident.getFullName(),
-                        resident.getEmail()
+                        resident.getResident().getFullName(),
+                        resident.getResident().getEmail()
                 ))
                 .toList();
         return new HouseResponse(

@@ -3,7 +3,7 @@ package com.hoa.silverleaf.houses;
 import com.hoa.silverleaf.houses.dto.HouseResponse;
 import com.hoa.silverleaf.houses.dto.GoogleOnboardingCompleteRequest;
 import com.hoa.silverleaf.houses.dto.GoogleOnboardingStartRequest;
-import com.hoa.silverleaf.houses.dto.LocalOnboardingLoginRequest;
+import com.hoa.silverleaf.houses.dto.LocalOnboardingRegisterRequest;
 import com.hoa.silverleaf.houses.dto.LocalOnboardingLoginResponse;
 import com.hoa.silverleaf.houses.dto.OnboardingCompleteRequest;
 import com.hoa.silverleaf.houses.dto.OnboardingContactRequest;
@@ -118,9 +118,9 @@ public class OnboardingController {
         );
     }
 
-    @PostMapping("/local/login-and-complete")
-    public LocalOnboardingLoginResponse localLoginAndComplete(@Valid @RequestBody LocalOnboardingLoginRequest request) {
-        log.info("Local login onboarding requested for houseId={}", request.houseId());
-        return onboardingService.localLoginAndComplete(request.houseId(), request.email(), request.password());
+    @PostMapping("/local/register-and-complete")
+    public LocalOnboardingLoginResponse localRegisterAndComplete(@Valid @RequestBody LocalOnboardingRegisterRequest request) {
+        log.info("Local register onboarding requested for houseId={}", request.houseId());
+        return onboardingService.localRegisterAndComplete(request.houseId(), request.fullName(), request.email());
     }
 }

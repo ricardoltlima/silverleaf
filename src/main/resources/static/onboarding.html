@@ -121,12 +121,12 @@
         <div id="googleBtn"></div>
     </div>
     <div id="localLoginSection" style="display:none; margin-bottom:14px;">
+        <label for="localFullName">Full name</label>
+        <input id="localFullName" type="text" placeholder="Resident name" style="width:100%;padding:12px;border:1px solid #c9d7ca;border-radius:12px;margin-bottom:10px;">
         <label for="localEmail">Local email</label>
         <input id="localEmail" type="email" placeholder="resident@example.com" style="width:100%;padding:12px;border:1px solid #c9d7ca;border-radius:12px;margin-bottom:10px;">
-        <label for="localPassword">Password</label>
-        <input id="localPassword" type="password" placeholder="Your password" style="width:100%;padding:12px;border:1px solid #c9d7ca;border-radius:12px;margin-bottom:10px;">
         <button id="localLoginBtn" type="button" style="width:100%;padding:12px;border:none;border-radius:12px;background:#2f6b45;color:#fff;font-weight:600;cursor:pointer;">
-            Login and continue
+            Create account and continue
         </button>
     </div>
 
@@ -139,8 +139,8 @@
     const houseSelect = document.getElementById("houseSelect");
     const messageBox = document.getElementById("message");
     const localLoginSection = document.getElementById("localLoginSection");
+    const localFullNameInput = document.getElementById("localFullName");
     const localEmailInput = document.getElementById("localEmail");
-    const localPasswordInput = document.getElementById("localPassword");
     const localLoginBtn = document.getElementById("localLoginBtn");
 
     function showMessage(type, text) {
@@ -212,26 +212,26 @@
         );
     }
 
-    async function localLoginAndComplete() {
+    async function localRegisterAndComplete() {
         const houseId = Number(houseSelect.value);
+        const fullName = String(localFullNameInput.value || "").trim();
         const email = String(localEmailInput.value || "").trim();
-        const password = String(localPasswordInput.value || "");
         if (!houseId) {
             showMessage("error", "Select your address first.");
             return;
         }
-        if (!email || !password) {
-            showMessage("error", "Enter local email and password.");
+        if (!fullName || !email) {
+            showMessage("error", "Enter full name and email.");
             return;
         }
 
-        const res = await fetch(`${API_BASE}/local/login-and-complete`, {
+        const res = await fetch(`${API_BASE}/local/register-and-complete`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ houseId, email, password })
+            body: JSON.stringify({ houseId, fullName, email })
         });
         if (!res.ok) {
-            let err = "Unable to login locally";
+            let err = "Unable to complete local onboarding";
             try {
                 const body = await res.json();
                 err = body.message || err;
@@ -244,8 +244,8 @@
         if (accessToken) {
             localStorage.setItem("silverleaf_access_token", accessToken);
         }
-        showMessage("info", "Login successful. Redirecting to main page...");
-        window.location.href = "/";
+        showMessage("info", "Account created. Redirecting to main page...");
+        window.location.href = "/app/feed";
     }
 
     (async function init() {
@@ -254,11 +254,11 @@
             const config = await loadPublicConfig();
             if (config.localLoginEnabled) {
                 localLoginSection.style.display = "block";
-                document.querySelector(".small").textContent = "Local mode: use email and password to access your account.";
+                document.querySelector(".small").textContent = "Local mode: select address, enter name/email, and we create your account automatically.";
             } else {
                 renderGoogleButton(config.googleClientId);
             }
-            localLoginBtn.addEventListener("click", localLoginAndComplete);
+            localLoginBtn.addEventListener("click", localRegisterAndComplete);
         } catch (err) {
             showMessage("error", err.message || "Unexpected error during onboarding setup.");
         }

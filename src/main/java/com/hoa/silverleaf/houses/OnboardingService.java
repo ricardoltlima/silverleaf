@@ -2,8 +2,8 @@ package com.hoa.silverleaf.houses;
 
 import com.hoa.silverleaf.common.NotFoundException;
 import com.hoa.silverleaf.auth.AuthService;
-import com.hoa.silverleaf.auth.dto.AuthRequest;
 import com.hoa.silverleaf.auth.dto.AuthResponse;
+import com.hoa.silverleaf.auth.dto.RegisterRequest;
 import com.hoa.silverleaf.houses.dto.HouseResponse;
 import com.hoa.silverleaf.houses.dto.LocalOnboardingLoginResponse;
 import com.hoa.silverleaf.houses.dto.OnboardingCompleteRequest;
@@ -19,7 +19,9 @@ import com.hoa.silverleaf.houses.onboarding.OnboardingStatus;
 import com.hoa.silverleaf.houses.onboarding.IdentityAssertion;
 import com.hoa.silverleaf.users.UserEntity;
 import com.hoa.silverleaf.users.UserRepository;
+import com.hoa.silverleaf.users.UserRole;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,6 +42,7 @@ public class OnboardingService {
     private final OnboardingProperties onboardingProperties;
     private final AuthService authService;
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     public OnboardingService(
             HouseRepository houseRepository,
@@ -49,7 +52,8 @@ public class OnboardingService {
             OnboardingNotificationService onboardingNotificationService,
             OnboardingProperties onboardingProperties,
             AuthService authService,
-            UserRepository userRepository
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder
     ) {
         this.houseRepository = houseRepository;
         this.houseResidentRepository = houseResidentRepository;
@@ -59,6 +63,7 @@ public class OnboardingService {
         this.onboardingProperties = onboardingProperties;
         this.authService = authService;
         this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Transactional
@@ -188,15 +193,21 @@ public class OnboardingService {
     }
 
     @Transactional
-    public LocalOnboardingLoginResponse localLoginAndComplete(Long houseId, String email, String password) {
+    public LocalOnboardingLoginResponse localRegisterAndComplete(Long houseId, String fullName, String email) {
         if (!onboardingProperties.isLocalLoginEnabled()) {
-            log.warn("Local login onboarding attempted while disabled houseId={}", houseId);
-            throw new IllegalArgumentException("Local login onboarding is disabled for this environment");
+            log.warn("Local register onboarding attempted while disabled houseId={}", houseId);
+            throw new IllegalArgumentException("Local onboarding is disabled for this environment");
         }
 
         String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
-        log.info("Local onboarding login requested houseId={} email={}", houseId, normalizedEmail);
-        AuthResponse authResponse = authService.login(new AuthRequest(normalizedEmail, password));
+        if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
+            log.warn("Local onboarding register rejected because email already exists houseId={} email={}", houseId, normalizedEmail);
+            throw new IllegalArgumentException("Email already registered");
+        }
+
+        String generatedPassword = generateLocalOnboardingPassword();
+        log.info("Local onboarding register requested houseId={} email={}", houseId, normalizedEmail);
+        AuthResponse authResponse = authService.register(new RegisterRequest(fullName.trim(), normalizedEmail, generatedPassword));
         UserEntity user = userRepository.findByEmailIgnoreCase(normalizedEmail)
                 .orElseThrow(() -> new NotFoundException("User not found"));
 
@@ -218,7 +229,7 @@ public class OnboardingService {
                 user.getFullName(),
                 user.getEmail()
         ));
-        log.info("Local onboarding login completed houseId={} userId={}", houseId, user.getId());
+        log.info("Local onboarding register completed houseId={} userId={}", houseId, user.getId());
 
         return new LocalOnboardingLoginResponse(authResponse, houseResponse);
     }
@@ -241,10 +252,12 @@ public class OnboardingService {
             throw new IllegalArgumentException("Resident already added to this address");
         }
 
+        UserEntity residentUser = ensureResidentUserExists(normalizedEmail, identity.fullName().trim());
         HouseResidentEntity resident = new HouseResidentEntity();
         resident.setHouse(house);
-        resident.setFullName(identity.fullName().trim());
-        resident.setEmail(normalizedEmail);
+        resident.setResident(residentUser);
+        resident.setActive(true);
+        resident.setMovedInAt(Instant.now());
         houseResidentRepository.save(resident);
 
         house.setStatus(HouseStatus.OCCUPIED);
@@ -266,6 +279,28 @@ public class OnboardingService {
         log.info("Onboarding completed sessionToken={} houseId={} provider={} residentEmail={}",
                 session.getSessionToken(), house.getId(), identity.provider(), normalizedEmail);
         return houseService.getHouseByQrToken(house.getQrToken());
+    }
+
+    private UserEntity ensureResidentUserExists(String normalizedEmail, String fullName) {
+        return userRepository.findByEmailIgnoreCase(normalizedEmail).map(existingUser -> {
+            if (!existingUser.getFullName().equals(fullName.trim())) {
+                existingUser.setFullName(fullName.trim());
+                existingUser = userRepository.save(existingUser);
+                log.info("Synced app_user fullName from house resident email={}", normalizedEmail);
+            }
+            return existingUser;
+        }).orElseGet(() -> {
+            UserEntity user = new UserEntity();
+            user.setEmail(normalizedEmail);
+            user.setFullName(fullName.trim());
+            // Onboarding identities do not provide a local password, so generate a random hash placeholder.
+            user.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
+            user.setRole(UserRole.RESIDENT);
+            user.setEnabled(true);
+            UserEntity saved = userRepository.save(user);
+            log.info("Created app_user from house resident email={}", normalizedEmail);
+            return saved;
+        });
     }
 
     private OnboardingSessionResponse toResponse(OnboardingSessionEntity session) {
@@ -294,5 +329,10 @@ public class OnboardingService {
             token = UUID.randomUUID().toString().replace("-", "");
         } while (onboardingSessionRepository.existsByVerificationToken(token));
         return token;
+    }
+
+    private String generateLocalOnboardingPassword() {
+        // Local onboarding auto-creates accounts and immediately returns auth tokens.
+        return "Loc@" + UUID.randomUUID().toString().replace("-", "").substring(0, 12) + "9";
     }
 }

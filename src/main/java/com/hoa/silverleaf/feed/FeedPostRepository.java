@@ -10,15 +10,17 @@ import java.util.List;
 
 public interface FeedPostRepository extends JpaRepository<FeedPostEntity, Long> {
 
-    List<FeedPostEntity> findAllByOrderByCreatedAtDescIdDesc(Pageable pageable);
+    List<FeedPostEntity> findByChannelOrderByCreatedAtDescIdDesc(FeedChannel channel, Pageable pageable);
 
     @Query("""
             select p from FeedPostEntity p
-            where p.createdAt < :cursorCreatedAt
-                or (p.createdAt = :cursorCreatedAt and p.id < :cursorId)
+            where p.channel = :channel
+                and (p.createdAt < :cursorCreatedAt
+                or (p.createdAt = :cursorCreatedAt and p.id < :cursorId))
             order by p.createdAt desc, p.id desc
             """)
     List<FeedPostEntity> findFeedAfterCursor(
+            @Param("channel") FeedChannel channel,
             @Param("cursorCreatedAt") Instant cursorCreatedAt,
             @Param("cursorId") Long cursorId,
             Pageable pageable

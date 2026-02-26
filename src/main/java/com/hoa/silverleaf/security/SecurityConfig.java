@@ -42,12 +42,15 @@ public class SecurityConfig {
         log.info("Building security filter chain (stateless JWT mode)");
         http
                 .csrf(AbstractHttpConfigurer::disable)
+                .headers(headers -> headers.frameOptions(frameOptions -> frameOptions.sameOrigin()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(handler -> handler.authenticationEntryPoint(authenticationEntryPoint))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/",
                                 "/index.html",
+                                "/app.html",
+                                "/app/**",
                                 "/onboarding.html",
                                 "/*.css",
                                 "/*.js",
@@ -56,6 +59,8 @@ public class SecurityConfig {
                                 "/*.jpeg",
                                 "/*.svg",
                                 "/*.ico",
+                                "/hoa/**",
+                                "/ws/**",
                                 "/uploads/**",
                                 "/api/v1/auth/**",
                                 "/api/v1/public/**",

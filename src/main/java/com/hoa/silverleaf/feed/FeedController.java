@@ -3,6 +3,7 @@ package com.hoa.silverleaf.feed;
 import com.hoa.silverleaf.feed.dto.CreateFeedPostRequest;
 import com.hoa.silverleaf.feed.dto.CreateFeedCommentRequest;
 import com.hoa.silverleaf.feed.dto.FeedCommentResponse;
+import com.hoa.silverleaf.feed.dto.FeedCommentReactionResponse;
 import com.hoa.silverleaf.feed.dto.FeedLikeResponse;
 import com.hoa.silverleaf.feed.dto.FeedPageResponse;
 import com.hoa.silverleaf.feed.dto.FeedPostResponse;
@@ -39,11 +40,13 @@ public class FeedController {
 
     @GetMapping
     public FeedPageResponse feed(
+            @AuthenticationPrincipal AppUserPrincipal principal,
             @RequestParam(required = false) String cursor,
-            @RequestParam(defaultValue = "20") int limit
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(defaultValue = "COMMUNITY") FeedChannel channel
     ) {
-        log.debug("Feed read requested cursor={} limit={}", cursor, limit);
-        return feedService.getFeed(cursor, limit);
+        log.debug("Feed read requested cursor={} limit={} channel={}", cursor, limit, channel);
+        return feedService.getFeed(principal, cursor, limit, channel);
     }
 
     @PostMapping("/posts")
@@ -52,7 +55,8 @@ public class FeedController {
             @AuthenticationPrincipal AppUserPrincipal principal,
             @Valid @RequestBody CreateFeedPostRequest request
     ) {
-        log.info("Feed post create requested by userId={}", principal.getId());
+        log.info("Feed post create requested by userId={} channel={}", principal.getId(),
+                request.channel() == null ? FeedChannel.COMMUNITY : request.channel());
         return feedService.createPost(principal, request);
     }
 
@@ -70,10 +74,11 @@ public class FeedController {
     @PostMapping("/posts/{postId}/likes")
     public FeedLikeResponse likePost(
             @AuthenticationPrincipal AppUserPrincipal principal,
-            @PathVariable Long postId
+            @PathVariable Long postId,
+            @RequestParam(defaultValue = "HEART") FeedReactionType reaction
     ) {
-        log.info("Feed like requested postId={} userId={}", postId, principal.getId());
-        return feedService.likePost(postId, principal);
+        log.info("Feed reaction requested postId={} userId={} reaction={}", postId, principal.getId(), reaction);
+        return feedService.likePost(postId, principal, reaction);
     }
 
     @DeleteMapping("/posts/{postId}/likes")
@@ -94,6 +99,29 @@ public class FeedController {
     ) {
         log.info("Feed comment create requested postId={} userId={}", postId, principal.getId());
         return feedService.addComment(postId, principal, request);
+    }
+
+    @PostMapping("/posts/{postId}/comments/{commentId}/likes")
+    public FeedCommentReactionResponse reactToComment(
+            @AuthenticationPrincipal AppUserPrincipal principal,
+            @PathVariable Long postId,
+            @PathVariable Long commentId,
+            @RequestParam(defaultValue = "HEART") FeedReactionType reaction
+    ) {
+        log.info("Feed comment reaction requested postId={} commentId={} userId={} reaction={}",
+                postId, commentId, principal.getId(), reaction);
+        return feedService.reactToComment(commentId, principal, reaction);
+    }
+
+    @DeleteMapping("/posts/{postId}/comments/{commentId}/likes")
+    public FeedCommentReactionResponse clearCommentReaction(
+            @AuthenticationPrincipal AppUserPrincipal principal,
+            @PathVariable Long postId,
+            @PathVariable Long commentId
+    ) {
+        log.info("Feed comment reaction clear requested postId={} commentId={} userId={}",
+                postId, commentId, principal.getId());
+        return feedService.clearCommentReaction(commentId, principal);
     }
 
     @DeleteMapping("/posts/{postId}")

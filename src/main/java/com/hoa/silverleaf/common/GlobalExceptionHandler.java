@@ -3,6 +3,7 @@ package com.hoa.silverleaf.common;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -85,7 +86,7 @@ public class GlobalExceptionHandler {
     }
 
     private ResponseEntity<ApiErrorResponse> build(HttpStatus status, String message, String path) {
-        return ResponseEntity.status(status).body(new ApiErrorResponse(
+        return ResponseEntity.status(status).contentType(MediaType.APPLICATION_JSON).body(new ApiErrorResponse(
                 Instant.now(),
                 status.value(),
                 status.getReasonPhrase(),

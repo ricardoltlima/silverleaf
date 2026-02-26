@@ -3,7 +3,7 @@
     "_postman_id": "f7408e0f-7d16-4f9c-b4d3-6d26f0c4b7d2",
     "name": "Silverleaf API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Collection for testing Silverleaf auth and user endpoints."
+    "description": "Collection for testing Silverleaf auth, onboarding, residents, and feed endpoints."
   },
   "item": [
     {
@@ -190,6 +190,57 @@
             "api",
             "v1",
             "me"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Users - Upload My Photo",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Upload my photo returns 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('Response includes photoUrl', function () {",
+              "    pm.expect(json.photoUrl).to.be.a('string').and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": "{{profilePhotoFilePath}}"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/me/photo",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "me",
+            "photo"
           ]
         }
       }
@@ -722,6 +773,23 @@
     },
     {
       "name": "Feed - Create Post",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Create feed post returns 201', function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "const json = pm.response.json();",
+              "if (json && json.id) {",
+              "    pm.collectionVariables.set('feedPostId', String(json.id));",
+              "}"
+            ]
+          }
+        }
+      ],
       "request": {
         "method": "POST",
         "header": [
@@ -751,6 +819,171 @@
           ]
         }
       }
+    },
+    {
+      "name": "Feed - Upload Media (Image/Video)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Feed upload returns 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('Upload response has url and type', function () {",
+              "    pm.expect(json.url).to.be.a('string').and.not.empty;",
+              "    pm.expect(json.type).to.be.a('string').and.not.empty;",
+              "});",
+              "pm.collectionVariables.set('feedMediaUrl', json.url);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": "{{feedUploadFilePath}}"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/feed/uploads",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "feed",
+            "uploads"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Feed - React (Agree/Disagree/Report)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/feed/posts/{{feedPostId}}/likes?reaction={{feedReaction}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "feed",
+            "posts",
+            "{{feedPostId}}",
+            "likes"
+          ],
+          "query": [
+            {
+              "key": "reaction",
+              "value": "{{feedReaction}}"
+            }
+          ]
+        },
+        "description": "Reaction mapping: AGREE=HEART, DISAGREE=CLAP, REPORT=OK"
+      }
+    },
+    {
+      "name": "Feed - Unreact (Toggle Off)",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/feed/posts/{{feedPostId}}/likes",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "feed",
+            "posts",
+            "{{feedPostId}}",
+            "likes"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Feed - Reply (Comment)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"{{feedCommentText}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/feed/posts/{{feedPostId}}/comments",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "feed",
+            "posts",
+            "{{feedPostId}}",
+            "comments"
+          ]
+        },
+        "description": "When this request succeeds, backend also broadcasts a websocket event to /topic/feed."
+      }
+    },
+    {
+      "name": "Feed - WebSocket Notes",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/actuator/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "actuator",
+            "health"
+          ]
+        },
+        "description": "Realtime replies are delivered via STOMP over SockJS endpoint {{baseUrl}}/ws and topic /topic/feed. Use a websocket-capable STOMP client for live subscription testing."
+      }
     }
   ],
   "variable": [
@@ -772,6 +1005,10 @@
     },
     {
       "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "profilePhotoFilePath",
       "value": ""
     },
     {
@@ -857,6 +1094,22 @@
     {
       "key": "feedMediaUrl",
       "value": "https://images.unsplash.com/photo-1506744038136-46273834b3fb"
+    },
+    {
+      "key": "feedUploadFilePath",
+      "value": ""
+    },
+    {
+      "key": "feedPostId",
+      "value": "1"
+    },
+    {
+      "key": "feedReaction",
+      "value": "HEART"
+    },
+    {
+      "key": "feedCommentText",
+      "value": "Agree with this post."
     }
   ]
 }

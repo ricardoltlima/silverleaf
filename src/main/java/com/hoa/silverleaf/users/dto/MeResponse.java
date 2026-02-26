@@ -6,6 +6,7 @@ public record MeResponse(
         Long id,
         String email,
         String fullName,
-        UserRole role
+        UserRole role,
+        String photoUrl
 ) {
 }

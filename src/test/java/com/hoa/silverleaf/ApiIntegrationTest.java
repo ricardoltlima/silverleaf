@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -173,6 +174,10 @@ class ApiIntegrationTest {
                 .andExpect(jsonPath("$.residents.length()").value(1))
                 .andExpect(jsonPath("$.residents[0].email").value("ricardo.lima@example.com"));
 
+        UserEntity onboardedUser = userRepository.findByEmailIgnoreCase("ricardo.lima@example.com").orElse(null);
+        assertThat(onboardedUser).isNotNull();
+        assertThat(onboardedUser.getRole()).isEqualTo(UserRole.RESIDENT);
+
         mockMvc.perform(get("/api/v1/public/onboarding/houses/pending"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isEmpty());
@@ -314,11 +319,13 @@ class ApiIntegrationTest {
         long postId = objectMapper.readTree(createdPostResult.getResponse().getContentAsString()).get("id").asLong();
 
         mockMvc.perform(post("/api/v1/feed/posts/" + postId + "/likes")
-                        .header("Authorization", "Bearer " + viewerToken))
+                        .header("Authorization", "Bearer " + viewerToken)
+                        .param("reaction", "CLAP"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.postId").value(postId))
-                .andExpect(jsonPath("$.liked").value(true))
-                .andExpect(jsonPath("$.likesCount").value(1));
+                .andExpect(jsonPath("$.viewerReaction").value("CLAP"))
+                .andExpect(jsonPath("$.likesCount").value(1))
+                .andExpect(jsonPath("$.reactionCounts.CLAP").value(1));
 
         mockMvc.perform(post("/api/v1/feed/posts/" + postId + "/comments")
                         .header("Authorization", "Bearer " + viewerToken)
@@ -337,6 +344,8 @@ class ApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].id").value(postId))
                 .andExpect(jsonPath("$.items[0].likesCount").value(1))
+                .andExpect(jsonPath("$.items[0].viewerReaction").value(nullValue()))
+                .andExpect(jsonPath("$.items[0].reactionCounts.CLAP").value(1))
                 .andExpect(jsonPath("$.items[0].commentsCount").value(1))
                 .andExpect(jsonPath("$.items[0].comments[0].text").value("Great post!"));
 
@@ -430,8 +439,9 @@ class ApiIntegrationTest {
 
         HouseResidentEntity primaryResident = new HouseResidentEntity();
         primaryResident.setHouse(house);
-        primaryResident.setFullName("Resident User");
-        primaryResident.setEmail("resident.house@example.com");
+        primaryResident.setResident(userRepository.findByEmailIgnoreCase("resident.house@example.com").orElseThrow());
+        primaryResident.setActive(true);
+        primaryResident.setMovedInAt(java.time.Instant.now());
         houseResidentRepository.save(primaryResident);
 
         String token = loginAndGetAccessToken("resident.house@example.com", "Passw0rd!");
@@ -477,6 +487,10 @@ class ApiIntegrationTest {
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.residents.length()").value(2));
+
+        UserEntity spouseUser = userRepository.findByEmailIgnoreCase("spouse@example.com").orElse(null);
+        assertThat(spouseUser).isNotNull();
+        assertThat(spouseUser.getRole()).isEqualTo(UserRole.RESIDENT);
     }
 
     private String loginAndGetAccessToken(String email, String password) throws Exception {

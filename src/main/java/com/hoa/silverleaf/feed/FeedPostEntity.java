@@ -9,6 +9,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -29,6 +31,10 @@ public class FeedPostEntity {
 
     @Column(name = "body_text", length = 4000)
     private String bodyText;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "channel", nullable = false, length = 30)
+    private FeedChannel channel = FeedChannel.COMMUNITY;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -60,5 +66,13 @@ public class FeedPostEntity {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public FeedChannel getChannel() {
+        return channel;
+    }
+
+    public void setChannel(FeedChannel channel) {
+        this.channel = channel;
     }
 }
