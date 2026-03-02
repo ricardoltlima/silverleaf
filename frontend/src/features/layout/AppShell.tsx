@@ -3,19 +3,23 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { clearTokens } from "@/lib/authStorage";
 import { RightRail } from "@/features/layout/RightRail";
-import { PdfDocumentModal } from "@/features/layout/PdfDocumentModal";
 import { ProfilePhotoEditorModal } from "@/features/layout/ProfilePhotoEditorModal";
 import { CommunityStandardsModal } from "@/features/hoa/CommunityStandardsModal";
+import { ClubhouseFormModal } from "@/features/hoa/ClubhouseFormModal";
 import { MessagesModal } from "@/features/messages/MessagesModal";
 import { fetchUnreadCount } from "@/features/messages/messagesApi";
 import { fetchFeed } from "@/features/feed/feedApi";
 import { getUnreadGroupPosts } from "@/features/groups/groupAlerts";
+import { fetchGroupRequests } from "@/features/groups/groupsApi";
+import { fetchAllViolations } from "@/features/board/boardApi";
+import { getLastSeenViolationsAt } from "@/features/board/violationsStorage";
 import {
   fetchCurrentUser,
   fetchMyHousehold,
   uploadMyProfilePhoto,
   type CurrentUser
 } from "@/features/users/currentUserApi";
+import { isHoaManager, isSystemAdmin } from "@/features/users/roleUtils";
 
 const links = [
   { to: "/community", label: "Home", icon: "/icon-home.svg", type: "route" as const },
@@ -24,11 +28,18 @@ const links = [
   { to: "/profile", label: "Profile", icon: "/icon-profile.svg", type: "route" as const }
 ];
 
-const boardLinks = [
+const menuLinks = [
   { to: "/community", label: "Community" },
+  { to: "/neighbors", label: "Neighbors" },
   { to: "/services", label: "Services" },
   { to: "/garage-sales", label: "Garage Sales" },
   { to: "/groups", label: "Groups" }
+];
+
+const boardAdminLinks = [
+  { to: "/board/news", label: "Board News" },
+  { to: "/board/broadcasts", label: "Message Everyone" },
+  { to: "/board/polls", label: "Polls" }
 ];
 
 function dataUrlToFile(dataUrl: string, fileName: string): File {
@@ -46,6 +57,7 @@ function dataUrlToFile(dataUrl: string, fileName: string): File {
 export function AppShell() {
   const queryClient = useQueryClient();
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+  const [messagesTargetUserId, setMessagesTargetUserId] = useState<number | null>(null);
   const meQuery = useQuery({
     queryKey: ["me"],
     queryFn: fetchCurrentUser
@@ -56,7 +68,7 @@ export function AppShell() {
     retry: false
   });
   const [hoaExpanded, setHoaExpanded] = useState(false);
-  const [openDoc, setOpenDoc] = useState<null | "community-standards" | "forms">(null);
+  const [openDoc, setOpenDoc] = useState<null | "community-standards" | "clubhouse-form">(null);
   const [photoDraft, setPhotoDraft] = useState<string | null>(null);
   const [messagesOpen, setMessagesOpen] = useState(false);
   const unreadCountQuery = useQuery({
@@ -69,7 +81,21 @@ export function AppShell() {
     queryFn: () => fetchFeed(100, "GROUP"),
     refetchInterval: 5000
   });
+  const groupRequestsQuery = useQuery({
+    queryKey: ["groups", "requests", "badge"],
+    queryFn: fetchGroupRequests,
+    refetchInterval: 5000
+  });
+  const isAdmin = isHoaManager(meQuery.data?.role);
+  const isSystem = isSystemAdmin(meQuery.data?.role);
+  const violationsQuery = useQuery({
+    queryKey: ["violations", "alerts", "badge"],
+    queryFn: fetchAllViolations,
+    enabled: isAdmin,
+    refetchInterval: 5000
+  });
   const [groupSeenVersion, setGroupSeenVersion] = useState(0);
+  const [violationsSeenVersion, setViolationsSeenVersion] = useState(0);
 
   useEffect(() => {
     const onSeenChange = () => setGroupSeenVersion((current) => current + 1);
@@ -79,10 +105,47 @@ export function AppShell() {
     };
   }, []);
 
+  useEffect(() => {
+    const onSeenChange = () => setViolationsSeenVersion((current) => current + 1);
+    window.addEventListener("silverleaf-violations-seen-changed", onSeenChange);
+    return () => {
+      window.removeEventListener("silverleaf-violations-seen-changed", onSeenChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onOpenMessages = (event: Event) => {
+      const customEvent = event as CustomEvent<number | null>;
+      setMessagesTargetUserId(customEvent.detail ?? null);
+      setMessagesOpen(true);
+    };
+    window.addEventListener("silverleaf-open-messages", onOpenMessages as EventListener);
+    return () => {
+      window.removeEventListener("silverleaf-open-messages", onOpenMessages as EventListener);
+    };
+  }, []);
+
   const unreadGroupAlertsCount = useMemo(
     () => getUnreadGroupPosts(groupAlertsQuery.data?.items ?? []).length,
     [groupAlertsQuery.data?.items, groupSeenVersion]
   );
+  const unreadViolationAlertsCount = useMemo(() => {
+    if (!isAdmin) {
+      return 0;
+    }
+    const lastSeenAt = getLastSeenViolationsAt();
+    return (violationsQuery.data ?? []).filter((item) => {
+      if (item.status !== "OPEN") {
+        return false;
+      }
+      if (!lastSeenAt) {
+        return true;
+      }
+      return new Date(item.createdAt).getTime() > new Date(lastSeenAt).getTime();
+    }).length;
+  }, [isAdmin, violationsQuery.data, violationsSeenVersion]);
+  const unreadAlertsCount =
+    unreadGroupAlertsCount + (groupRequestsQuery.data?.length ?? 0) + unreadViolationAlertsCount;
 
   useEffect(() => {
     if (meQuery.data?.photoUrl !== undefined) {
@@ -132,22 +195,19 @@ export function AppShell() {
   return (
     <div className="min-h-screen bg-slate-100">
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white">
-        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-3">
-          <div className="flex items-center gap-3">
-            <img src="/silverleaf-icon.svg" alt="Silverleaf" className="h-9 w-9 rounded-lg shadow-sm" />
-            <input
-              placeholder="Find neighbors, topics, services..."
-              className="w-72 rounded-full border border-slate-300 bg-slate-50 px-4 py-2 text-sm outline-none ring-leaf-600 focus:ring-2"
-            />
-          </div>
-
-          <nav className="flex items-center gap-1">
+        <div className="mx-auto flex w-full max-w-7xl justify-center px-4 py-3">
+          <div className="flex items-center gap-6">
+            <img src="/silverleaf-icon.svg" alt="Silverleaf" className="h-10 w-10 rounded-xl shadow-sm" />
+            <nav className="flex items-center gap-1">
             {links.map((link) => (
               link.type === "messages" ? (
                 <button
                   key={link.to}
                   type="button"
-                  onClick={() => setMessagesOpen(true)}
+                  onClick={() => {
+                    setMessagesTargetUserId(null);
+                    setMessagesOpen(true);
+                  }}
                   className="relative flex min-w-20 flex-col items-center rounded-lg px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-100"
                 >
                   <img src={link.icon} alt="" className="mb-1 h-5 w-5" />
@@ -170,15 +230,16 @@ export function AppShell() {
                 >
                   <img src={link.icon} alt="" className="mb-1 h-5 w-5" />
                   <span>{link.label}</span>
-                  {link.to === "/alerts" && unreadGroupAlertsCount > 0 ? (
+                  {link.to === "/alerts" && unreadAlertsCount > 0 ? (
                     <span className="absolute right-2 top-1 rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                      {unreadGroupAlertsCount}
+                      {unreadAlertsCount}
                     </span>
                   ) : null}
                 </NavLink>
               )
             ))}
-          </nav>
+            </nav>
+          </div>
         </div>
       </header>
 
@@ -219,14 +280,40 @@ export function AppShell() {
             <button
               type="button"
               onClick={() => setHoaExpanded((current) => !current)}
-              className="mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100"
+              className={`mb-2 flex w-full items-center justify-between rounded-2xl border px-3 py-3 text-left transition ${
+                hoaExpanded
+                  ? "border-leaf-200 bg-[linear-gradient(135deg,_#f7fbf4_0%,_#eef6f0_55%,_#f8fafc_100%)] shadow-sm"
+                  : "border-slate-200 bg-white hover:border-leaf-200 hover:bg-[linear-gradient(135deg,_#fbfdf9_0%,_#f4f8f5_100%)]"
+              }`}
             >
-              <span>HOA</span>
-              <span className={`text-xs transition-transform ${hoaExpanded ? "rotate-180" : ""}`}>v</span>
+              <span className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[linear-gradient(135deg,_#3f7f52_0%,_#6aa26b_100%)] text-white shadow-sm ring-1 ring-leaf-200/60">
+                  <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current stroke-[1.8]">
+                    <path d="M3 10.5 12 4l9 6.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M5.5 9.5V20h13V9.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M9 20v-5.5h6V20" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </span>
+                <span className="flex flex-col">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-leaf-700">
+                    Silverleaf
+                  </span>
+                  <span className="text-sm font-semibold text-slate-900">HOA</span>
+                </span>
+              </span>
+              <span
+                className={`flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-all ${
+                  hoaExpanded ? "rotate-180 border-leaf-200 text-leaf-700" : ""
+                }`}
+              >
+                <svg viewBox="0 0 20 20" className="h-4 w-4 fill-none stroke-current stroke-[1.8]">
+                  <path d="m5 7.5 5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
             </button>
             <div
-              className={`overflow-hidden pl-3 transition-all duration-300 ${
-                hoaExpanded ? "max-h-32 opacity-100" : "max-h-0 opacity-0"
+              className={`overflow-hidden rounded-2xl bg-slate-50/85 pl-3 transition-all duration-300 ${
+                hoaExpanded ? "max-h-72 opacity-100" : "max-h-0 opacity-0"
               }`}
             >
               <button
@@ -238,11 +325,23 @@ export function AppShell() {
               </button>
               <button
                 type="button"
-                onClick={() => setOpenDoc("forms")}
+                onClick={() => setOpenDoc("clubhouse-form")}
                 className="mb-1 block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-600 hover:bg-slate-100"
               >
-                Forms
+                Clubhouse Form
               </button>
+              {isAdmin ? (
+                <NavLink
+                  to="/hoa/workspace"
+                  className={({ isActive }) =>
+                    `mb-1 block w-full rounded-lg px-3 py-2 text-left text-sm transition ${
+                      isActive ? "bg-leaf-50 text-leaf-900" : "text-slate-600 hover:bg-slate-100"
+                    }`
+                  }
+                >
+                  HOA Workspace
+                </NavLink>
+              ) : null}
               <NavLink
                 to="/reservations"
                 className={({ isActive }) =>
@@ -253,9 +352,31 @@ export function AppShell() {
               >
                 Reservations Calendar
               </NavLink>
+              <NavLink
+                to="/report-violation"
+                className={({ isActive }) =>
+                  `mb-1 block w-full rounded-lg px-3 py-2 text-left text-sm transition ${
+                    isActive ? "bg-leaf-50 text-leaf-900" : "text-slate-600 hover:bg-slate-100"
+                  }`
+                }
+              >
+                Report violation
+              </NavLink>
+              {isAdmin ? (
+                <NavLink
+                  to="/violations"
+                  className={({ isActive }) =>
+                    `mb-1 block w-full rounded-lg px-3 py-2 text-left text-sm transition ${
+                      isActive ? "bg-leaf-50 text-leaf-900" : "text-slate-600 hover:bg-slate-100"
+                    }`
+                  }
+                >
+                  Violations
+                </NavLink>
+              ) : null}
             </div>
 
-            {boardLinks.map((item) => (
+            {menuLinks.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -268,6 +389,43 @@ export function AppShell() {
                 {item.label}
               </NavLink>
             ))}
+            {isAdmin ? (
+              <div className="mt-2 border-t border-slate-200 pt-2">
+                <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  HOA Board
+                </p>
+                {boardAdminLinks.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={({ isActive }) =>
+                      `mb-1 block w-full rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
+                        isActive ? "bg-indigo-50 text-indigo-900" : "text-slate-700 hover:bg-slate-100"
+                      }`
+                    }
+                  >
+                    {item.label}
+                  </NavLink>
+                ))}
+              </div>
+            ) : null}
+            {isSystem ? (
+              <div className="mt-2 border-t border-slate-200 pt-2">
+                <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  System Admin
+                </p>
+                <NavLink
+                  to="/system-admin"
+                  className={({ isActive }) =>
+                    `mb-1 block w-full rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
+                      isActive ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
+                    }`
+                  }
+                >
+                  Control Center
+                </NavLink>
+              </div>
+            ) : null}
           </section>
 
           <button
@@ -287,13 +445,7 @@ export function AppShell() {
       </div>
 
       {openDoc === "community-standards" ? <CommunityStandardsModal onClose={closeDocModal} /> : null}
-      {openDoc === "forms" ? (
-        <PdfDocumentModal
-          title="Clubhouse Form"
-          fileUrl="/hoa/ClubhouseForm.pdf"
-          onClose={closeDocModal}
-        />
-      ) : null}
+      {openDoc === "clubhouse-form" ? <ClubhouseFormModal onClose={closeDocModal} /> : null}
       {photoDraft ? (
         <ProfilePhotoEditorModal
           source={photoDraft}
@@ -301,7 +453,14 @@ export function AppShell() {
           onSave={saveProfilePhoto}
         />
       ) : null}
-      <MessagesModal open={messagesOpen} onClose={() => setMessagesOpen(false)} />
+      <MessagesModal
+        open={messagesOpen}
+        initialSelectedUserId={messagesTargetUserId}
+        onClose={() => {
+          setMessagesOpen(false);
+          setMessagesTargetUserId(null);
+        }}
+      />
     </div>
   );
 }

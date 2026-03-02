@@ -9,6 +9,7 @@ public record UpdateMyProfileRequest(
         @NotBlank @Email @Size(max = 320) String email,
         @Size(max = 40) String phoneNumber,
         @Size(min = 8, max = 120) String password,
+        boolean addressVisible,
         boolean serviceEnabled,
         @Size(max = 140) String serviceTitle,
         String serviceDescription,

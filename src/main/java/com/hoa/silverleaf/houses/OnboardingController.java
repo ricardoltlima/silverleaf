@@ -5,6 +5,8 @@ import com.hoa.silverleaf.houses.dto.GoogleOnboardingCompleteRequest;
 import com.hoa.silverleaf.houses.dto.GoogleOnboardingStartRequest;
 import com.hoa.silverleaf.houses.dto.LocalOnboardingRegisterRequest;
 import com.hoa.silverleaf.houses.dto.LocalOnboardingLoginResponse;
+import com.hoa.silverleaf.houses.dto.PublicResidentInvitationResponse;
+import com.hoa.silverleaf.houses.dto.AcceptResidentInvitationResponse;
 import com.hoa.silverleaf.houses.dto.OnboardingCompleteRequest;
 import com.hoa.silverleaf.houses.dto.OnboardingContactRequest;
 import com.hoa.silverleaf.houses.dto.PublicConfigResponse;
@@ -13,6 +15,7 @@ import com.hoa.silverleaf.houses.dto.OnboardingStartRequest;
 import com.hoa.silverleaf.houses.onboarding.OnboardingProperties;
 import com.hoa.silverleaf.houses.onboarding.GoogleIdentityService;
 import com.hoa.silverleaf.houses.onboarding.IdentityAssertion;
+import com.hoa.silverleaf.security.AppUserPrincipal;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.servlet.view.RedirectView;
@@ -22,6 +25,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
 import java.util.List;
 
@@ -51,6 +55,12 @@ public class OnboardingController {
     public List<HouseResponse> pendingHouses() {
         log.info("Pending houses requested for onboarding");
         return houseService.listPendingHouses();
+    }
+
+    @GetMapping("/houses")
+    public List<HouseResponse> houses() {
+        log.info("Full house list requested for onboarding/login");
+        return houseService.listHouses();
     }
 
     @GetMapping("/houses/{qrToken}")
@@ -121,6 +131,26 @@ public class OnboardingController {
     @PostMapping("/local/register-and-complete")
     public LocalOnboardingLoginResponse localRegisterAndComplete(@Valid @RequestBody LocalOnboardingRegisterRequest request) {
         log.info("Local register onboarding requested for houseId={}", request.houseId());
-        return onboardingService.localRegisterAndComplete(request.houseId(), request.fullName(), request.email());
+        return onboardingService.localRegisterAndComplete(
+                request.houseId(),
+                request.fullName(),
+                request.email(),
+                request.password()
+        );
+    }
+
+    @GetMapping("/invitations/{invitationToken}")
+    public PublicResidentInvitationResponse residentInvitation(@PathVariable String invitationToken) {
+        log.info("Resident invitation lookup requested");
+        return onboardingService.getResidentInvitation(invitationToken);
+    }
+
+    @PostMapping("/invitations/{invitationToken}/accept")
+    public AcceptResidentInvitationResponse acceptResidentInvitation(
+            @AuthenticationPrincipal AppUserPrincipal principal,
+            @PathVariable String invitationToken
+    ) {
+        log.info("Resident invitation accept requested by userId={}", principal.getId());
+        return onboardingService.acceptResidentInvitation(principal, invitationToken);
     }
 }

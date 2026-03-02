@@ -1,11 +1,12 @@
 import { apiClient } from "@/lib/apiClient";
 import { ApiError } from "@/lib/apiClient";
+import type { UserRole } from "@/features/users/roleUtils";
 
 export type CurrentUser = {
   id: number;
   email: string;
   fullName: string;
-  role: string;
+  role: UserRole;
   photoUrl: string | null;
 };
 
@@ -16,6 +17,7 @@ export type MyProfile = {
   photoUrl: string | null;
   phoneNumber: string | null;
   address: string | null;
+  addressVisible: boolean;
   serviceEnabled: boolean;
   serviceTitle: string | null;
   serviceDescription: string | null;
@@ -32,6 +34,7 @@ export type UpdateMyProfilePayload = {
   email: string;
   phoneNumber: string | null;
   password: string | null;
+  addressVisible: boolean;
   serviceEnabled: boolean;
   serviceTitle: string | null;
   serviceDescription: string | null;

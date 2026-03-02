@@ -1,0 +1,38 @@
+package com.hoa.silverleaf.board;
+
+import com.hoa.silverleaf.users.UserEntity;
+import jakarta.persistence.*;
+import org.hibernate.annotations.CreationTimestamp;
+
+import java.time.Instant;
+
+@Entity
+@Table(name = "board_broadcast")
+public class BroadcastEntity {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false, length = 180)
+    private String title;
+
+    @Column(name = "body_text", nullable = false, columnDefinition = "text")
+    private String bodyText;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "author_user_id", nullable = false)
+    private UserEntity author;
+
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    public Long getId() { return id; }
+    public String getTitle() { return title; }
+    public void setTitle(String title) { this.title = title; }
+    public String getBodyText() { return bodyText; }
+    public void setBodyText(String bodyText) { this.bodyText = bodyText; }
+    public UserEntity getAuthor() { return author; }
+    public void setAuthor(UserEntity author) { this.author = author; }
+    public Instant getCreatedAt() { return createdAt; }
+}

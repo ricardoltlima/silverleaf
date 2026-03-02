@@ -6,6 +6,8 @@ import com.hoa.silverleaf.auth.dto.AuthResponse;
 import com.hoa.silverleaf.auth.dto.RegisterRequest;
 import com.hoa.silverleaf.houses.dto.HouseResponse;
 import com.hoa.silverleaf.houses.dto.LocalOnboardingLoginResponse;
+import com.hoa.silverleaf.houses.dto.PublicResidentInvitationResponse;
+import com.hoa.silverleaf.houses.dto.AcceptResidentInvitationResponse;
 import com.hoa.silverleaf.houses.dto.OnboardingCompleteRequest;
 import com.hoa.silverleaf.houses.dto.OnboardingContactRequest;
 import com.hoa.silverleaf.houses.dto.OnboardingSessionResponse;
@@ -17,9 +19,13 @@ import com.hoa.silverleaf.houses.onboarding.OnboardingProperties;
 import com.hoa.silverleaf.houses.onboarding.OnboardingSessionRepository;
 import com.hoa.silverleaf.houses.onboarding.OnboardingStatus;
 import com.hoa.silverleaf.houses.onboarding.IdentityAssertion;
+import com.hoa.silverleaf.houses.onboarding.ResidentInvitationEntity;
+import com.hoa.silverleaf.houses.onboarding.ResidentInvitationRepository;
+import com.hoa.silverleaf.houses.onboarding.ResidentInvitationStatus;
 import com.hoa.silverleaf.users.UserEntity;
 import com.hoa.silverleaf.users.UserRepository;
 import com.hoa.silverleaf.users.UserRole;
+import com.hoa.silverleaf.security.AppUserPrincipal;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -40,6 +46,7 @@ public class OnboardingService {
     private final HouseService houseService;
     private final OnboardingNotificationService onboardingNotificationService;
     private final OnboardingProperties onboardingProperties;
+    private final ResidentInvitationRepository residentInvitationRepository;
     private final AuthService authService;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -51,6 +58,7 @@ public class OnboardingService {
             HouseService houseService,
             OnboardingNotificationService onboardingNotificationService,
             OnboardingProperties onboardingProperties,
+            ResidentInvitationRepository residentInvitationRepository,
             AuthService authService,
             UserRepository userRepository,
             PasswordEncoder passwordEncoder
@@ -61,6 +69,7 @@ public class OnboardingService {
         this.houseService = houseService;
         this.onboardingNotificationService = onboardingNotificationService;
         this.onboardingProperties = onboardingProperties;
+        this.residentInvitationRepository = residentInvitationRepository;
         this.authService = authService;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
@@ -193,7 +202,7 @@ public class OnboardingService {
     }
 
     @Transactional
-    public LocalOnboardingLoginResponse localRegisterAndComplete(Long houseId, String fullName, String email) {
+    public LocalOnboardingLoginResponse localRegisterAndComplete(Long houseId, String fullName, String email, String password) {
         if (!onboardingProperties.isLocalLoginEnabled()) {
             log.warn("Local register onboarding attempted while disabled houseId={}", houseId);
             throw new IllegalArgumentException("Local onboarding is disabled for this environment");
@@ -205,9 +214,8 @@ public class OnboardingService {
             throw new IllegalArgumentException("Email already registered");
         }
 
-        String generatedPassword = generateLocalOnboardingPassword();
         log.info("Local onboarding register requested houseId={} email={}", houseId, normalizedEmail);
-        AuthResponse authResponse = authService.register(new RegisterRequest(fullName.trim(), normalizedEmail, generatedPassword));
+        AuthResponse authResponse = authService.register(new RegisterRequest(fullName.trim(), normalizedEmail, password));
         UserEntity user = userRepository.findByEmailIgnoreCase(normalizedEmail)
                 .orElseThrow(() -> new NotFoundException("User not found"));
 
@@ -281,6 +289,70 @@ public class OnboardingService {
         return houseService.getHouseByQrToken(house.getQrToken());
     }
 
+    @Transactional(readOnly = true)
+    public PublicResidentInvitationResponse getResidentInvitation(String invitationToken) {
+        ResidentInvitationEntity invitation = residentInvitationRepository.findByInvitationToken(invitationToken.trim())
+                .orElseThrow(() -> new NotFoundException("Invitation not found"));
+        boolean expired = invitation.getExpiresAt().isBefore(Instant.now()) || invitation.getStatus() != ResidentInvitationStatus.PENDING;
+        return new PublicResidentInvitationResponse(
+                invitation.getInvitationToken(),
+                invitation.getHouse().getId(),
+                invitation.getHouse().getAddress(),
+                invitation.getResident().getFullName(),
+                invitation.getResident().getEmail(),
+                expired
+        );
+    }
+
+    @Transactional
+    public AcceptResidentInvitationResponse acceptResidentInvitation(AppUserPrincipal principal, String invitationToken) {
+        ResidentInvitationEntity invitation = residentInvitationRepository.findByInvitationToken(invitationToken.trim())
+                .orElseThrow(() -> new NotFoundException("Invitation not found"));
+        if (invitation.getStatus() != ResidentInvitationStatus.PENDING) {
+            throw new IllegalArgumentException("Invitation is no longer available");
+        }
+        if (invitation.getExpiresAt().isBefore(Instant.now())) {
+            invitation.setStatus(ResidentInvitationStatus.EXPIRED);
+            residentInvitationRepository.save(invitation);
+            throw new IllegalArgumentException("Invitation expired");
+        }
+        if (!invitation.getResident().getId().equals(principal.getId())) {
+            log.warn("Resident invitation accept rejected because authenticated userId={} does not match invitation residentId={}",
+                    principal.getId(), invitation.getResident().getId());
+            throw new IllegalArgumentException("Invitation does not belong to the authenticated resident");
+        }
+
+        houseResidentRepository.findByResidentIdAndActiveTrueOrderByMovedInAtDescIdDesc(principal.getId())
+                .forEach(existing -> {
+                    if (!existing.getHouse().getId().equals(invitation.getHouse().getId())) {
+                        existing.setActive(false);
+                    }
+                });
+
+        boolean alreadyLinked = houseResidentRepository.findByResidentIdAndActiveTrueOrderByMovedInAtDescIdDesc(principal.getId()).stream()
+                .anyMatch(existing -> existing.getHouse().getId().equals(invitation.getHouse().getId()));
+        if (!alreadyLinked) {
+            HouseResidentEntity resident = new HouseResidentEntity();
+            resident.setHouse(invitation.getHouse());
+            resident.setResident(invitation.getResident());
+            resident.setActive(true);
+            resident.setMovedInAt(Instant.now());
+            houseResidentRepository.save(resident);
+        }
+
+        invitation.getHouse().setStatus(HouseStatus.OCCUPIED);
+        if (invitation.getHouse().getClaimedAt() == null) {
+            invitation.getHouse().setClaimedAt(Instant.now());
+        }
+        houseRepository.save(invitation.getHouse());
+
+        invitation.setStatus(ResidentInvitationStatus.ACCEPTED);
+        invitation.setAcceptedAt(Instant.now());
+        residentInvitationRepository.save(invitation);
+        log.info("Resident invitation accepted residentId={} houseId={}", principal.getId(), invitation.getHouse().getId());
+        return new AcceptResidentInvitationResponse(invitation.getHouse().getId(), invitation.getHouse().getAddress());
+    }
+
     private UserEntity ensureResidentUserExists(String normalizedEmail, String fullName) {
         return userRepository.findByEmailIgnoreCase(normalizedEmail).map(existingUser -> {
             if (!existingUser.getFullName().equals(fullName.trim())) {
@@ -331,8 +403,4 @@ public class OnboardingService {
         return token;
     }
 
-    private String generateLocalOnboardingPassword() {
-        // Local onboarding auto-creates accounts and immediately returns auth tokens.
-        return "Loc@" + UUID.randomUUID().toString().replace("-", "").substring(0, 12) + "9";
-    }
 }

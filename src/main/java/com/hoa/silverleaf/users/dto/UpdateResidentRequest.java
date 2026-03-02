@@ -1,5 +1,6 @@
 package com.hoa.silverleaf.users.dto;
 
+import com.hoa.silverleaf.users.UserRole;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -7,6 +8,7 @@ import jakarta.validation.constraints.Size;
 public record UpdateResidentRequest(
         @NotBlank @Size(max = 120) String fullName,
         @Email @NotBlank String email,
-        @Size(min = 8, max = 72) String password
+        @Size(min = 8, max = 72) String password,
+        UserRole role
 ) {
 }

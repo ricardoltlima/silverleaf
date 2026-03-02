@@ -3,204 +3,47 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Silverleaf Login</title>
+    <title>Silverleaf Reserve</title>
     <style>
-        :root {
-            --bg: #f4f7f1;
-            --surface: #ffffff;
-            --line: #d6e1d4;
-            --text: #1f2a22;
-            --muted: #5d6c61;
-            --brand: #2f6b45;
-            --brand-dark: #225236;
-            --error: #9b2f2a;
-        }
-
-        * { box-sizing: border-box; }
-
         body {
             margin: 0;
             min-height: 100vh;
             display: grid;
             place-items: center;
-            padding: 24px;
+            background: linear-gradient(180deg, #eef3ec 0%, #f8faf7 100%);
+            color: #1f2937;
             font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-            color: var(--text);
-            background: radial-gradient(circle at 20% 10%, #e7f2e7 0, #f4f7f1 45%, #eef3ed 100%);
         }
 
-        .card {
-            width: min(440px, 100%);
-            background: var(--surface);
-            border: 1px solid var(--line);
-            border-radius: 18px;
-            padding: 26px;
-            box-shadow: 0 14px 36px rgba(29, 59, 38, 0.12);
+        .shell {
+            text-align: center;
+            padding: 24px;
         }
 
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 18px;
-        }
-
-        .brand img {
-            width: 38px;
-            height: 38px;
-            border-radius: 10px;
-        }
-
-        h1 {
-            margin: 0;
-            font-size: 1.28rem;
-        }
-
-        .muted {
-            margin: 6px 0 20px;
-            color: var(--muted);
-            font-size: 0.92rem;
-        }
-
-        label {
+        .shell img {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
             display: block;
-            margin: 12px 0 6px;
+            margin: 0 auto 16px;
+        }
+
+        .shell a {
+            color: #2f6b45;
             font-weight: 600;
-        }
-
-        input {
-            width: 100%;
-            padding: 11px 12px;
-            border: 1px solid #c4d2c2;
-            border-radius: 10px;
-            font: inherit;
-            background: #fff;
-        }
-
-        button {
-            width: 100%;
-            margin-top: 14px;
-            border: none;
-            border-radius: 10px;
-            padding: 11px 12px;
-            background: var(--brand);
-            color: #fff;
-            font: inherit;
-            font-weight: 700;
-            cursor: pointer;
-        }
-
-        button:hover { background: var(--brand-dark); }
-
-        .message {
-            min-height: 20px;
-            margin-top: 10px;
-            font-size: 0.9rem;
-            color: var(--error);
-        }
-
-        .links {
-            margin-top: 14px;
-            display: flex;
-            justify-content: space-between;
-            gap: 10px;
-            flex-wrap: wrap;
-            font-size: 0.88rem;
-        }
-
-        .links a {
-            color: var(--brand);
             text-decoration: none;
-            font-weight: 600;
         }
     </style>
 </head>
 <body>
-<main class="card">
-    <div class="brand">
-        <img src="/silverleaf-icon.svg" alt="Silverleaf Reserve">
-        <h1>Silverleaf Reserve</h1>
-    </div>
-    <p class="muted">Login to access the neighborhood main page.</p>
-
-    <form id="loginForm">
-        <label for="email">Email</label>
-        <input id="email" name="email" type="email" autocomplete="email" value="ricardoltlima@gmail.com" required>
-
-        <label for="password">Password</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" value="myPassw0rd!" required>
-
-        <button id="loginBtn" type="submit">Login</button>
-    </form>
-
-    <div id="message" class="message"></div>
-
-    <div class="links">
-        <a href="/onboarding.html">New resident onboarding</a>
-        <a href="/swagger-ui/index.html">API Docs</a>
-    </div>
-</main>
-
+<div class="shell">
+    <img src="/silverleaf-icon.svg" alt="Silverleaf Reserve">
+    <p>Redirecting to Silverleaf Reserve...</p>
+    <p><a href="/app/login">Open login</a></p>
+</div>
 <script>
-    const loginForm = document.getElementById("loginForm");
-    const emailInput = document.getElementById("email");
-    const passwordInput = document.getElementById("password");
-    const messageEl = document.getElementById("message");
-    const loginBtn = document.getElementById("loginBtn");
-
-    function setMessage(text, isError) {
-        messageEl.style.color = isError ? "#9b2f2a" : "#225236";
-        messageEl.textContent = text;
-    }
-
-    async function login(event) {
-        event.preventDefault();
-        setMessage("", true);
-        loginBtn.disabled = true;
-
-        try {
-            const res = await fetch("/api/v1/auth/login", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    email: String(emailInput.value || "").trim(),
-                    password: String(passwordInput.value || "")
-                })
-            });
-
-            const payload = await safeJson(res);
-            if (!res.ok) {
-                setMessage(payload.message || "Invalid email or password.", true);
-                return;
-            }
-
-            if (!payload.accessToken) {
-                setMessage("Login response did not include an access token.", true);
-                return;
-            }
-
-            localStorage.setItem("silverleaf_access_token", payload.accessToken);
-            if (payload.refreshToken) {
-                localStorage.setItem("silverleaf_refresh_token", payload.refreshToken);
-            }
-            setMessage("Login successful. Redirecting...", false);
-            window.location.href = "/app/feed";
-        } catch (_) {
-            setMessage("Network error while logging in.", true);
-        } finally {
-            loginBtn.disabled = false;
-        }
-    }
-
-    async function safeJson(response) {
-        try {
-            return await response.json();
-        } catch (_) {
-            return {};
-        }
-    }
-
-    loginForm.addEventListener("submit", login);
+    const hasToken = !!localStorage.getItem("silverleaf_access_token");
+    window.location.replace(hasToken ? "/app/community" : "/app/login");
 </script>
 </body>
 </html>

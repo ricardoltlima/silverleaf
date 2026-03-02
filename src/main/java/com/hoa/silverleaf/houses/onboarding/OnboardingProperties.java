@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 public class OnboardingProperties {
 
     private String verificationBaseUrl;
+    private String residentInviteBaseUrl;
     private boolean localLoginEnabled;
     private Notification notification = new Notification();
     private Google google = new Google();
@@ -26,6 +27,14 @@ public class OnboardingProperties {
 
     public void setLocalLoginEnabled(boolean localLoginEnabled) {
         this.localLoginEnabled = localLoginEnabled;
+    }
+
+    public String getResidentInviteBaseUrl() {
+        return residentInviteBaseUrl;
+    }
+
+    public void setResidentInviteBaseUrl(String residentInviteBaseUrl) {
+        this.residentInviteBaseUrl = residentInviteBaseUrl;
     }
 
     public Notification getNotification() {

@@ -10,22 +10,26 @@ const SWIPE_THRESHOLD = 50;
 function renderSlideItem(item: FeedMedia, index: number) {
   if (item.type === "VIDEO") {
     return (
-      <video
-        src={item.url}
-        controls
-        playsInline
-        className="max-h-[480px] w-full object-cover"
-      />
+      <div className="flex h-[min(70vh,540px)] w-full items-center justify-center bg-slate-950">
+        <video
+          src={item.url}
+          controls
+          playsInline
+          className="max-h-full w-full object-contain"
+        />
+      </div>
     );
   }
 
   if (item.type === "IMAGE") {
     return (
-      <img
-        src={item.url}
-        alt={`Post media ${index + 1}`}
-        className="max-h-[480px] w-full object-cover"
-      />
+      <div className="flex h-[min(70vh,540px)] w-full items-center justify-center bg-slate-100">
+        <img
+          src={item.url}
+          alt={`Post media ${index + 1}`}
+          className="max-h-full w-full object-contain"
+        />
+      </div>
     );
   }
 

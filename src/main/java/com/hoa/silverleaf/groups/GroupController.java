@@ -1,6 +1,7 @@
 package com.hoa.silverleaf.groups;
 
 import com.hoa.silverleaf.groups.dto.CreateGroupRequest;
+import com.hoa.silverleaf.groups.dto.GroupJoinRequestResponse;
 import com.hoa.silverleaf.groups.dto.GroupResponse;
 import com.hoa.silverleaf.security.AppUserPrincipal;
 import jakarta.validation.Valid;
@@ -56,5 +57,26 @@ public class GroupController {
             @PathVariable Long groupId
     ) {
         return groupService.unsubscribe(principal, groupId);
+    }
+
+    @GetMapping("/requests")
+    public List<GroupJoinRequestResponse> pendingRequests(@AuthenticationPrincipal AppUserPrincipal principal) {
+        return groupService.listPendingRequests(principal);
+    }
+
+    @PostMapping("/requests/{requestId}/approve")
+    public GroupJoinRequestResponse approveRequest(
+            @AuthenticationPrincipal AppUserPrincipal principal,
+            @PathVariable Long requestId
+    ) {
+        return groupService.approveRequest(principal, requestId);
+    }
+
+    @PostMapping("/requests/{requestId}/reject")
+    public GroupJoinRequestResponse rejectRequest(
+            @AuthenticationPrincipal AppUserPrincipal principal,
+            @PathVariable Long requestId
+    ) {
+        return groupService.rejectRequest(principal, requestId);
     }
 }

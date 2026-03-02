@@ -4,14 +4,24 @@ import com.hoa.silverleaf.common.NotFoundException;
 import com.hoa.silverleaf.houses.HouseEntity;
 import com.hoa.silverleaf.houses.HouseResidentEntity;
 import com.hoa.silverleaf.houses.HouseResidentRepository;
+import com.hoa.silverleaf.houses.HouseRepository;
+import com.hoa.silverleaf.houses.HouseStatus;
+import com.hoa.silverleaf.houses.onboarding.OnboardingNotificationService;
+import com.hoa.silverleaf.houses.onboarding.ResidentInvitationEntity;
+import com.hoa.silverleaf.houses.onboarding.ResidentInvitationRepository;
+import com.hoa.silverleaf.houses.onboarding.ResidentInvitationStatus;
 import com.hoa.silverleaf.houses.dto.HouseResidentResponse;
 import com.hoa.silverleaf.security.AppUserPrincipal;
 import com.hoa.silverleaf.users.dto.AddHouseholdMemberRequest;
 import com.hoa.silverleaf.users.dto.CreateResidentRequest;
+import com.hoa.silverleaf.users.dto.CreateResidentInviteRequest;
 import com.hoa.silverleaf.users.dto.HouseholdResponse;
 import com.hoa.silverleaf.users.dto.MeResponse;
 import com.hoa.silverleaf.users.dto.MyProfileResponse;
+import com.hoa.silverleaf.users.dto.NeighborListItemResponse;
+import com.hoa.silverleaf.users.dto.NeighborProfileResponse;
 import com.hoa.silverleaf.users.dto.ResidentResponse;
+import com.hoa.silverleaf.users.dto.ResidentInvitationResponse;
 import com.hoa.silverleaf.users.dto.UpdateMyProfileRequest;
 import com.hoa.silverleaf.users.dto.UpdateResidentRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +38,9 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.Locale;
 import java.time.Instant;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -35,17 +48,26 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final HouseResidentRepository houseResidentRepository;
+    private final HouseRepository houseRepository;
+    private final ResidentInvitationRepository residentInvitationRepository;
+    private final OnboardingNotificationService onboardingNotificationService;
     private final PasswordEncoder passwordEncoder;
     private final ProfilePhotoStorageService profilePhotoStorageService;
 
     public UserService(
             UserRepository userRepository,
             HouseResidentRepository houseResidentRepository,
+            HouseRepository houseRepository,
+            ResidentInvitationRepository residentInvitationRepository,
+            OnboardingNotificationService onboardingNotificationService,
             PasswordEncoder passwordEncoder,
             ProfilePhotoStorageService profilePhotoStorageService
     ) {
         this.userRepository = userRepository;
         this.houseResidentRepository = houseResidentRepository;
+        this.houseRepository = houseRepository;
+        this.residentInvitationRepository = residentInvitationRepository;
+        this.onboardingNotificationService = onboardingNotificationService;
         this.passwordEncoder = passwordEncoder;
         this.profilePhotoStorageService = profilePhotoStorageService;
     }
@@ -59,46 +81,152 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public Page<ResidentResponse> listResidents(int page, int size, String q) {
+    public Page<ResidentResponse> listResidents(AppUserPrincipal principal, int page, int size, String q) {
         // Guardrails prevent abusive page sizes and negative offsets from clients.
         int pageNumber = Math.max(0, page);
         int pageSize = Math.max(1, Math.min(size, 100));
         String normalizedQuery = q == null ? "" : q.trim();
         var pageable = PageRequest.of(pageNumber, pageSize, Sort.by(Sort.Direction.DESC, "id"));
+        Set<UserRole> roles = listableRolesFor(principal);
 
         log.debug("Listing residents page={}, size={}, q='{}'", pageNumber, pageSize, normalizedQuery);
         if (normalizedQuery.isBlank()) {
-            Page<ResidentResponse> residents = userRepository.findByRole(UserRole.RESIDENT, pageable)
+            Page<ResidentResponse> residents = userRepository.findByRoleIn(roles, pageable)
                     .map(this::toResidentResponse);
             log.debug("Residents listed without query resultCount={} page={} size={}",
                     residents.getNumberOfElements(), pageNumber, pageSize);
             return residents;
         }
 
-        Page<ResidentResponse> residents = userRepository.searchByRoleAndQuery(UserRole.RESIDENT, normalizedQuery, pageable)
+        Page<ResidentResponse> residents = userRepository.searchByRoleInAndQuery(roles, normalizedQuery, pageable)
                 .map(this::toResidentResponse);
         log.debug("Residents listed with query='{}' resultCount={} page={} size={}",
                 normalizedQuery, residents.getNumberOfElements(), pageNumber, pageSize);
         return residents;
     }
 
+    @Transactional(readOnly = true)
+    public List<NeighborListItemResponse> listNeighbors() {
+        AppUserPrincipal principal = requirePrincipal();
+        List<UserEntity> residents = userRepository.findByRoleInAndEnabledTrueOrderByFullNameAsc(Set.of(UserRole.RESIDENT, UserRole.TENANT, UserRole.HOA_ADMIN)).stream()
+                .filter(user -> !user.getId().equals(principal.getId()))
+                .toList();
+        Map<Long, String> addressesByResidentId = resolveActiveAddresses(
+                residents.stream().map(UserEntity::getId).toList()
+        );
+        return residents.stream()
+                .map(user -> new NeighborListItemResponse(
+                        user.getId(),
+                        user.getFullName(),
+                        user.getPhotoUrl(),
+                        user.isAddressVisible() ? addressesByResidentId.get(user.getId()) : null,
+                        user.isServiceEnabled(),
+                        user.getServiceTitle()
+                ))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public NeighborProfileResponse getNeighborProfile(Long neighborId) {
+        AppUserPrincipal principal = requirePrincipal();
+        if (principal.getId().equals(neighborId)) {
+            log.debug("Neighbor profile requested for current user userId={}", neighborId);
+        }
+        UserEntity user = userRepository.findById(neighborId)
+                .filter(candidate -> candidate.getRole().isCommunityMember())
+                .orElseThrow(() -> new NotFoundException("Neighbor not found"));
+        String address = houseResidentRepository.findFirstActiveByResidentIdOrderByMovedInAtDescIdDesc(user.getId())
+                .map(entry -> entry.getHouse().getAddress())
+                .orElse(null);
+        return new NeighborProfileResponse(
+                user.getId(),
+                user.getFullName(),
+                user.getEmail(),
+                user.getPhotoUrl(),
+                user.isAddressVisible() ? address : null,
+                user.isServiceEnabled(),
+                user.getServiceTitle(),
+                user.getServiceDescription(),
+                user.getServiceContactPhone(),
+                user.getServiceContactEmail(),
+                user.getServiceBusinessUrl(),
+                user.getServiceHours(),
+                user.getServiceArea(),
+                user.getServiceVisibility() == null ? ServiceVisibility.PUBLIC.name() : user.getServiceVisibility().name()
+        );
+    }
+
     @Transactional
-    public ResidentResponse createResident(CreateResidentRequest request) {
+    public ResidentResponse createResident(AppUserPrincipal principal, CreateResidentRequest request) {
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
         if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
             log.warn("Resident creation rejected because email already exists: {}", normalizedEmail);
             throw new IllegalArgumentException("Email already registered");
         }
+        UserRole requestedRole = assignableRoleFor(principal, request.role());
 
         UserEntity user = new UserEntity();
         user.setFullName(request.fullName().trim());
         user.setEmail(normalizedEmail);
         user.setPasswordHash(passwordEncoder.encode(request.password()));
-        user.setRole(UserRole.RESIDENT);
+        user.setRole(requestedRole);
 
         UserEntity savedUser = userRepository.save(user);
         log.info("Resident created successfully. userId={}, email={}", savedUser.getId(), savedUser.getEmail());
         return toResidentResponse(savedUser);
+    }
+
+    @Transactional
+    public ResidentInvitationResponse createResidentInvitation(AppUserPrincipal principal, CreateResidentInviteRequest request) {
+        String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
+        if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
+            log.warn("Resident invitation rejected because email already exists: {}", normalizedEmail);
+            throw new IllegalArgumentException("Email already registered");
+        }
+        UserRole requestedRole = assignableRoleFor(principal, request.role());
+
+        UserEntity invitedBy = userRepository.findById(principal.getId())
+                .orElseThrow(() -> new NotFoundException("Inviting admin not found"));
+        HouseEntity house = houseRepository.findById(request.houseId())
+                .orElseThrow(() -> new NotFoundException("House not found"));
+
+        UserEntity resident = new UserEntity();
+        resident.setFullName(request.fullName().trim());
+        resident.setEmail(normalizedEmail);
+        resident.setPasswordHash(passwordEncoder.encode(request.password()));
+        resident.setRole(requestedRole);
+        resident.setEnabled(true);
+        UserEntity savedResident = userRepository.save(resident);
+
+        ResidentInvitationEntity invitation = new ResidentInvitationEntity();
+        invitation.setResident(savedResident);
+        invitation.setHouse(house);
+        invitation.setInvitedBy(invitedBy);
+        invitation.setInvitationToken(generateUniqueInvitationToken());
+        invitation.setStatus(ResidentInvitationStatus.PENDING);
+        invitation.setExpiresAt(Instant.now().plus(14, java.time.temporal.ChronoUnit.DAYS));
+        ResidentInvitationEntity savedInvitation = residentInvitationRepository.save(invitation);
+
+        onboardingNotificationService.sendResidentInvitation(
+                savedResident.getEmail(),
+                savedResident.getFullName(),
+                house.getAddress(),
+                savedInvitation.getInvitationToken()
+        );
+        String inviteUrl = onboardingNotificationService.buildResidentInviteUrl(savedInvitation.getInvitationToken());
+        log.info("Resident invitation created residentId={} houseId={} invitedByUserId={}",
+                savedResident.getId(), house.getId(), invitedBy.getId());
+        return new ResidentInvitationResponse(
+                savedResident.getId(),
+                savedResident.getFullName(),
+                savedResident.getEmail(),
+                savedResident.getRole(),
+                house.getId(),
+                house.getAddress(),
+                savedInvitation.getInvitationToken(),
+                inviteUrl,
+                savedInvitation.getExpiresAt()
+        );
     }
 
     @Transactional(readOnly = true)
@@ -110,7 +238,7 @@ public class UserService {
     }
 
     @Transactional
-    public ResidentResponse updateResident(Long id, UpdateResidentRequest request) {
+    public ResidentResponse updateResident(AppUserPrincipal principal, Long id, UpdateResidentRequest request) {
         UserEntity resident = userRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Resident not found"));
 
@@ -123,6 +251,7 @@ public class UserService {
 
         resident.setFullName(request.fullName().trim());
         resident.setEmail(normalizedEmail);
+        resident.setRole(assignableRoleFor(principal, request.role() == null ? resident.getRole() : request.role()));
         if (request.password() != null) {
             resident.setPasswordHash(passwordEncoder.encode(request.password()));
             log.info("Resident password reset by admin for userId={}", id);
@@ -174,7 +303,7 @@ public class UserService {
         AppUserPrincipal principal = requirePrincipal();
         UserEntity user = userRepository.findById(principal.getId())
                 .orElseThrow(() -> new NotFoundException("User not found"));
-        String address = houseResidentRepository.findFirstByEmailIgnoreCaseOrderByIdDesc(user.getEmail())
+        String address = houseResidentRepository.findFirstActiveByResidentIdOrderByMovedInAtDescIdDesc(user.getId())
                 .map(entry -> entry.getHouse().getAddress())
                 .orElse(null);
         return toMyProfileResponse(user, address);
@@ -195,6 +324,7 @@ public class UserService {
         user.setFullName(request.fullName().trim());
         user.setEmail(normalizedEmail);
         user.setPhoneNumber(trimToNull(request.phoneNumber()));
+        user.setAddressVisible(request.addressVisible());
         if (request.password() != null && !request.password().isBlank()) {
             user.setPasswordHash(passwordEncoder.encode(request.password()));
             log.info("Self-service password updated userId={}", user.getId());
@@ -211,7 +341,7 @@ public class UserService {
 
         UserEntity saved = userRepository.save(user);
         log.info("Self-service profile updated userId={}", saved.getId());
-        String address = houseResidentRepository.findFirstByEmailIgnoreCaseOrderByIdDesc(saved.getEmail())
+        String address = houseResidentRepository.findFirstActiveByResidentIdOrderByMovedInAtDescIdDesc(saved.getId())
                 .map(entry -> entry.getHouse().getAddress())
                 .orElse(null);
         return toMyProfileResponse(saved, address);
@@ -235,7 +365,7 @@ public class UserService {
     @Transactional(readOnly = true)
     public HouseholdResponse getMyHousehold() {
         AppUserPrincipal principal = requirePrincipal();
-        return houseResidentRepository.findFirstByEmailIgnoreCaseOrderByIdDesc(principal.getUsername())
+        return houseResidentRepository.findFirstActiveByResidentIdOrderByMovedInAtDescIdDesc(principal.getId())
                 .map(me -> toHouseholdResponse(me.getHouse()))
                 .orElseGet(() -> {
                     log.debug("No household linked for user email={}, returning empty household response", principal.getUsername());
@@ -246,7 +376,7 @@ public class UserService {
     @Transactional
     public HouseholdResponse addHouseholdMember(AddHouseholdMemberRequest request) {
         AppUserPrincipal principal = requirePrincipal();
-        HouseResidentEntity me = houseResidentRepository.findFirstByEmailIgnoreCaseOrderByIdDesc(principal.getUsername())
+        HouseResidentEntity me = houseResidentRepository.findFirstActiveByResidentIdOrderByMovedInAtDescIdDesc(principal.getId())
                 .orElseThrow(() -> new NotFoundException("No household found for this resident"));
 
         HouseEntity house = me.getHouse();
@@ -303,6 +433,7 @@ public class UserService {
                 user.getPhotoUrl(),
                 user.getPhoneNumber(),
                 address,
+                user.isAddressVisible(),
                 user.isServiceEnabled(),
                 user.getServiceTitle(),
                 user.getServiceDescription(),
@@ -313,6 +444,19 @@ public class UserService {
                 user.getServiceArea(),
                 user.getServiceVisibility() == null ? ServiceVisibility.PUBLIC.name() : user.getServiceVisibility().name()
         );
+    }
+
+    private Map<Long, String> resolveActiveAddresses(List<Long> residentIds) {
+        if (residentIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, String> addressesByResidentId = new LinkedHashMap<>();
+        houseResidentRepository.findActiveByResidentIdsOrderByMovedInAtDescIdDesc(residentIds)
+                .forEach(membership -> addressesByResidentId.putIfAbsent(
+                        membership.getResident().getId(),
+                        membership.getHouse().getAddress()
+                ));
+        return addressesByResidentId;
     }
 
     private String trimToNull(String value) {
@@ -342,5 +486,34 @@ public class UserService {
             throw new IllegalArgumentException("Not authenticated");
         }
         return principal;
+    }
+
+    private Set<UserRole> listableRolesFor(AppUserPrincipal principal) {
+        if (principal.getRole() == UserRole.ADMIN) {
+            return Set.of(UserRole.RESIDENT, UserRole.TENANT, UserRole.HOA_ADMIN, UserRole.ADMIN);
+        }
+        return Set.of(UserRole.RESIDENT, UserRole.TENANT, UserRole.HOA_ADMIN);
+    }
+
+    private UserRole assignableRoleFor(AppUserPrincipal principal, UserRole requestedRole) {
+        UserRole normalizedRole = requestedRole == null ? UserRole.RESIDENT : requestedRole;
+        if (principal.getRole() == UserRole.ADMIN) {
+            return normalizedRole;
+        }
+        if (principal.getRole() != UserRole.HOA_ADMIN) {
+            throw new IllegalArgumentException("User cannot manage resident roles");
+        }
+        if (normalizedRole == UserRole.ADMIN || normalizedRole == UserRole.HOA_ADMIN) {
+            throw new IllegalArgumentException("Only system admins can assign HOA admin or admin roles");
+        }
+        return normalizedRole;
+    }
+
+    private String generateUniqueInvitationToken() {
+        String token;
+        do {
+            token = java.util.UUID.randomUUID().toString().replace("-", "");
+        } while (residentInvitationRepository.existsByInvitationToken(token));
+        return token;
     }
 }

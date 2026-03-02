@@ -7,6 +7,7 @@ public record MyProfileResponse(
         String photoUrl,
         String phoneNumber,
         String address,
+        boolean addressVisible,
         boolean serviceEnabled,
         String serviceTitle,
         String serviceDescription,

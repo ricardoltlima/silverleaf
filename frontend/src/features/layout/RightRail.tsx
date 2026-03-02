@@ -1,4 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { fetchNews, type NewsItem } from "@/features/board/boardApi";
+
+const WEATHER_UNIT_KEY = "silverleaf_weather_unit";
 
 type WeatherState = {
   location: string;
@@ -7,33 +11,6 @@ type WeatherState = {
   summary: string;
   weatherCode: number;
 } | null;
-
-const NEWS_ITEMS = [
-  {
-    title: "Pool maintenance this Friday",
-    time: "3h ago",
-    details:
-      "The pool area will be closed Friday from 9:00 AM to 2:00 PM for scheduled cleaning and pump inspection. Please plan accordingly."
-  },
-  {
-    title: "Neighborhood watch update",
-    time: "5h ago",
-    details:
-      "A new neighborhood watch patrol schedule has been published. Volunteers are still welcome for evening rounds on weekends."
-  },
-  {
-    title: "Garage sale registrations open",
-    time: "9h ago",
-    details:
-      "Registrations for this month’s community garage sale are now open. Sellers can reserve spots and publish listings in the Garage Sales section."
-  },
-  {
-    title: "HOA monthly meeting agenda posted",
-    time: "1d ago",
-    details:
-      "The HOA agenda includes landscaping budget updates, clubhouse reservations policy review, and community standards reminders."
-  }
-];
 
 function weatherLabel(code: number): string {
   if (code === 0) return "Clear";
@@ -49,22 +26,51 @@ function weatherLabel(code: number): string {
 }
 
 function weatherIcon(code: number): string {
-  if (code === 0) return "☀️";
-  if ([1, 2].includes(code)) return "🌤️";
-  if (code === 3) return "☁️";
-  if ([45, 48].includes(code)) return "🌫️";
-  if ([51, 53, 55, 56, 57].includes(code)) return "🌦️";
-  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return "🌧️";
-  if ([71, 73, 75, 77, 85, 86].includes(code)) return "❄️";
-  if ([95, 96, 99].includes(code)) return "⛈️";
-  return "🌡️";
+  if (code === 0) return "\u2600\uFE0F";
+  if ([1, 2, 3].includes(code)) return "\u2601\uFE0F";
+  if ([45, 48].includes(code)) return "\uD83C\uDF2B\uFE0F";
+  if ([51, 53, 55, 56, 57].includes(code)) return "\uD83C\uDF26\uFE0F";
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return "\uD83C\uDF27\uFE0F";
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return "\u2744\uFE0F";
+  if ([95, 96, 99].includes(code)) return "\u26C8\uFE0F";
+  return "\uD83C\uDF21\uFE0F";
+}
+
+function newsTimeLabel(createdAt: string): string {
+  const diffMs = Date.now() - Date.parse(createdAt);
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 60) return `${Math.max(diffMin, 1)}m ago`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d ago`;
+}
+
+function isVideoUrl(url: string): boolean {
+  const value = url.toLowerCase();
+  return value.endsWith(".mp4") || value.endsWith(".webm") || value.endsWith(".ogg") || value.includes("/video/");
 }
 
 export function RightRail() {
   const [weather, setWeather] = useState<WeatherState>(null);
   const [weatherError, setWeatherError] = useState<string>("");
-  const [tempUnit, setTempUnit] = useState<"F" | "C">("F");
-  const [selectedNews, setSelectedNews] = useState<(typeof NEWS_ITEMS)[number] | null>(null);
+  const [tempUnit, setTempUnit] = useState<"F" | "C">(() => {
+    const savedUnit = localStorage.getItem(WEATHER_UNIT_KEY);
+    return savedUnit === "C" ? "C" : "F";
+  });
+  const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
+
+  const newsQuery = useQuery({
+    queryKey: ["board", "news"],
+    queryFn: fetchNews,
+    refetchInterval: 15000
+  });
+
+  const topNews = useMemo(() => (newsQuery.data ?? []).slice(0, 6), [newsQuery.data]);
+
+  useEffect(() => {
+    localStorage.setItem(WEATHER_UNIT_KEY, tempUnit);
+  }, [tempUnit]);
 
   useEffect(() => {
     let active = true;
@@ -116,18 +122,23 @@ export function RightRail() {
     <aside className="hidden space-y-4 xl:block">
       <section className="card p-4">
         <h3 className="mb-3 text-lg font-semibold text-slate-900">Silverleaf News</h3>
+        {newsQuery.isLoading ? <p className="text-sm text-slate-500">Loading news...</p> : null}
+        {newsQuery.isError ? <p className="text-sm text-rose-700">{(newsQuery.error as Error).message}</p> : null}
         <div className="space-y-3">
-          {NEWS_ITEMS.map((item) => (
+          {topNews.map((item) => (
             <button
-              key={item.title}
+              key={item.id}
               type="button"
               onClick={() => setSelectedNews(item)}
               className="w-full border-b border-slate-100 pb-2 text-left last:border-b-0"
             >
               <p className="text-sm font-medium text-slate-800 hover:underline">{item.title}</p>
-              <p className="text-xs text-slate-500">{item.time}</p>
+              <p className="text-xs text-slate-500">{newsTimeLabel(item.createdAt)}</p>
             </button>
           ))}
+          {!newsQuery.isLoading && !topNews.length ? (
+            <p className="text-sm text-slate-500">No board news published yet.</p>
+          ) : null}
         </div>
       </section>
 
@@ -140,7 +151,7 @@ export function RightRail() {
             className="rounded-full border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
             title="Toggle Celsius/Fahrenheit"
           >
-            {tempUnit === "F" ? "°F" : "°C"}
+            {tempUnit === "F" ? "F" : "C"}
           </button>
         </div>
         {weather ? (
@@ -148,7 +159,7 @@ export function RightRail() {
             <p className="text-sm text-slate-600">{weather.location}</p>
             <p className="text-2xl font-bold text-slate-900">
               {(tempUnit === "F" ? weather.temperatureF : (weather.temperatureF - 32) * (5 / 9)).toFixed(0)}
-              °
+              {'\u00B0'}
               {tempUnit}
             </p>
             <p className="text-sm text-slate-700">
@@ -156,8 +167,8 @@ export function RightRail() {
               {weather.summary}
             </p>
             <p className="text-xs text-slate-500">
-              <span className="mr-1">🌬️</span>
-              Wind {weather.windMph.toFixed(0)} mph
+              <span className="mr-1">{"\uD83C\uDF2C\uFE0F"}</span>
+              {weather.windMph.toFixed(0)} mph
             </p>
           </div>
         ) : (
@@ -186,8 +197,32 @@ export function RightRail() {
                 Close
               </button>
             </div>
-            <p className="mb-3 text-xs text-slate-500">{selectedNews.time}</p>
-            <p className="text-sm leading-6 text-slate-700">{selectedNews.details}</p>
+            <p className="mb-3 text-xs text-slate-500">
+              {selectedNews.authorName} - {new Date(selectedNews.createdAt).toLocaleString()}
+            </p>
+            <p className="text-sm leading-6 text-slate-700">{selectedNews.body}</p>
+            {selectedNews.mediaUrls?.length ? (
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                {selectedNews.mediaUrls.map((url, index) =>
+                  isVideoUrl(url) ? (
+                    <video
+                      key={`news-video-${index}`}
+                      src={url}
+                      controls
+                      className="max-h-[62vh] w-full rounded bg-black object-contain"
+                    />
+                  ) : (
+                    <a key={`news-img-${index}`} href={url} target="_blank" rel="noreferrer" className="block">
+                      <img
+                        src={url}
+                        alt="News media"
+                        className="max-h-[62vh] w-full rounded bg-slate-100 object-contain"
+                      />
+                    </a>
+                  )
+                )}
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}

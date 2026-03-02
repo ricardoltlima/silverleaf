@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Size;
 public record LocalOnboardingRegisterRequest(
         @NotNull Long houseId,
         @NotBlank @Size(max = 120) String fullName,
-        @Email @NotBlank String email
+        @Email @NotBlank String email,
+        @NotBlank @Size(min = 8, max = 72) String password
 ) {
 }

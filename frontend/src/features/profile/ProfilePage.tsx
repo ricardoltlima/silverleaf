@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchFeed } from "@/features/feed/feedApi";
+import { ProfilePhotoEditorModal } from "@/features/layout/ProfilePhotoEditorModal";
 import {
   fetchCurrentUser,
   fetchMyProfile,
@@ -8,13 +9,12 @@ import {
   uploadMyProfilePhoto
 } from "@/features/users/currentUserApi";
 
-const HARD_CODED_ADDRESS = "002 Silverleaf Lane";
-
 type PersonalForm = {
   fullName: string;
   email: string;
   phone: string;
   address: string;
+  addressVisible: boolean;
 };
 
 type ServiceForm = {
@@ -28,6 +28,18 @@ type ServiceForm = {
   serviceArea: string;
   visibility: "PUBLIC" | "GROUPS";
 };
+
+function dataUrlToFile(dataUrl: string, fileName: string): File {
+  const [header, content] = dataUrl.split(",");
+  const mimeMatch = header.match(/data:(.*?);base64/);
+  const mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg";
+  const binary = atob(content);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new File([bytes], fileName, { type: mimeType });
+}
 
 export function ProfilePage() {
   const queryClient = useQueryClient();
@@ -54,7 +66,8 @@ export function ProfilePage() {
     fullName: "",
     email: "",
     phone: "",
-    address: HARD_CODED_ADDRESS
+    address: "",
+    addressVisible: false
   });
   const [service, setService] = useState<ServiceForm>({
     enabled: false,
@@ -68,13 +81,19 @@ export function ProfilePage() {
     visibility: "PUBLIC"
   });
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [photoDraft, setPhotoDraft] = useState<string | null>(null);
 
   const uploadPhotoMutation = useMutation({
     mutationFn: uploadMyProfilePhoto,
-    onSuccess: () => {
+    onSuccess: (updatedMe) => {
       queryClient.invalidateQueries({ queryKey: ["me"] });
       queryClient.invalidateQueries({ queryKey: ["me-profile"] });
       queryClient.invalidateQueries({ queryKey: ["feed", "services"] });
+      window.dispatchEvent(
+        new CustomEvent("silverleaf-profile-photo-changed", {
+          detail: updatedMe.photoUrl || null
+        })
+      );
     }
   });
 
@@ -94,7 +113,9 @@ export function ProfilePage() {
       ...current,
       fullName: profileQuery.data.fullName || "",
       email: profileQuery.data.email || "",
-      phone: profileQuery.data.phoneNumber || ""
+      phone: profileQuery.data.phoneNumber || "",
+      address: profileQuery.data.address || "",
+      addressVisible: profileQuery.data.addressVisible ?? false
     }));
     setService({
       enabled: profileQuery.data.serviceEnabled,
@@ -120,6 +141,7 @@ export function ProfilePage() {
       email: personal.email,
       phoneNumber: personal.phone || null,
       password: null,
+      addressVisible: personal.addressVisible,
       serviceEnabled: service.enabled,
       serviceTitle: service.title || null,
       serviceDescription: service.description || null,
@@ -130,6 +152,22 @@ export function ProfilePage() {
       serviceArea: service.serviceArea || null,
       serviceVisibility: service.visibility
     });
+  };
+
+  const onPhotoChange = (file: File | null) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPhotoDraft(String(reader.result || ""));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const saveProfilePhoto = (value: string) => {
+    setPhotoDraft(null);
+    const file = dataUrlToFile(value, "profile.jpg");
+    uploadPhotoMutation.mutate(file);
   };
 
   return (
@@ -162,9 +200,7 @@ export function ProfilePage() {
               accept="image/*"
               className="hidden"
               onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (!file) return;
-                uploadPhotoMutation.mutate(file);
+                onPhotoChange(event.target.files?.[0] ?? null);
                 event.target.value = "";
               }}
             />
@@ -204,6 +240,38 @@ export function ProfilePage() {
               readOnly
               className="w-full cursor-not-allowed rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-600"
             />
+          </label>
+          <label className="text-sm">
+            <span className="mb-1 block text-slate-600">Address visibility</span>
+            <div className="flex items-center justify-between rounded-lg border border-slate-300 px-3 py-2">
+              <div>
+                <p className="text-sm font-medium text-slate-800">
+                  {personal.addressVisible ? "Public" : "Private"}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {personal.addressVisible
+                    ? "Neighbors can see your address in the directory."
+                    : "Only you can see your address."}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={personal.addressVisible}
+                onClick={() =>
+                  setPersonal((current) => ({ ...current, addressVisible: !current.addressVisible }))
+                }
+                className={`relative inline-flex h-7 w-12 items-center rounded-full transition ${
+                  personal.addressVisible ? "bg-leaf-600" : "bg-slate-300"
+                }`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
+                    personal.addressVisible ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
           </label>
         </div>
       </section>
@@ -336,18 +404,6 @@ export function ProfilePage() {
           >
             Save profile
           </button>
-          <button
-            type="button"
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-          >
-            Create service post
-          </button>
-          <button
-            type="button"
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-          >
-            Share profile
-          </button>
           {updateProfileMutation.isError ? (
             <span className="text-xs text-red-600">
               {(updateProfileMutation.error as Error).message}
@@ -356,6 +412,13 @@ export function ProfilePage() {
           {savedAt ? <span className="text-xs text-slate-500">Saved at {savedAt}</span> : null}
         </div>
       </section>
+      {photoDraft ? (
+        <ProfilePhotoEditorModal
+          source={photoDraft}
+          onCancel={() => setPhotoDraft(null)}
+          onSave={saveProfilePhoto}
+        />
+      ) : null}
     </div>
   );
 }

@@ -9,6 +9,10 @@ public record GroupResponse(
         Long ownerUserId,
         String ownerName,
         boolean subscribed,
+        boolean requestPending,
+        String requestStatus,
+        boolean owner,
+        long pendingRequestCount,
         long memberCount
 ) {
 }

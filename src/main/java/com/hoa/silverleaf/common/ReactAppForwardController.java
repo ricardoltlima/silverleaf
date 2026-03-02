@@ -9,6 +9,8 @@ public class ReactAppForwardController {
     @GetMapping({
             "/app",
             "/app/",
+            "/app/login",
+            "/app/login/",
             "/app/feed",
             "/app/feed/",
             "/app/community",
@@ -23,10 +25,22 @@ public class ReactAppForwardController {
             "/app/groups/",
             "/app/reservations",
             "/app/reservations/",
+            "/app/violations",
+            "/app/violations/",
             "/app/profile",
             "/app/profile/",
             "/app/messages",
-            "/app/messages/"
+            "/app/messages/",
+            "/app/hoa/workspace",
+            "/app/hoa/workspace/",
+            "/app/system-admin",
+            "/app/system-admin/",
+            "/app/board/news",
+            "/app/board/news/",
+            "/app/board/broadcasts",
+            "/app/board/broadcasts/",
+            "/app/board/polls",
+            "/app/board/polls/"
     })
     public String forwardReactAppRoutes() {
         // Forward known SPA routes to the React entrypoint so React Router handles client navigation.

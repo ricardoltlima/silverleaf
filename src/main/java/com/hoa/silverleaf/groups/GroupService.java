@@ -2,6 +2,7 @@ package com.hoa.silverleaf.groups;
 
 import com.hoa.silverleaf.common.NotFoundException;
 import com.hoa.silverleaf.groups.dto.CreateGroupRequest;
+import com.hoa.silverleaf.groups.dto.GroupJoinRequestResponse;
 import com.hoa.silverleaf.groups.dto.GroupResponse;
 import com.hoa.silverleaf.security.AppUserPrincipal;
 import com.hoa.silverleaf.users.UserEntity;
@@ -10,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -25,39 +27,42 @@ public class GroupService {
 
     private final ResidentGroupRepository residentGroupRepository;
     private final ResidentGroupMemberRepository residentGroupMemberRepository;
+    private final ResidentGroupJoinRequestRepository residentGroupJoinRequestRepository;
     private final UserRepository userRepository;
 
     public GroupService(
             ResidentGroupRepository residentGroupRepository,
             ResidentGroupMemberRepository residentGroupMemberRepository,
+            ResidentGroupJoinRequestRepository residentGroupJoinRequestRepository,
             UserRepository userRepository
     ) {
         this.residentGroupRepository = residentGroupRepository;
         this.residentGroupMemberRepository = residentGroupMemberRepository;
+        this.residentGroupJoinRequestRepository = residentGroupJoinRequestRepository;
         this.userRepository = userRepository;
     }
 
     @Transactional(readOnly = true)
     public List<GroupResponse> listGroupsForUser(AppUserPrincipal principal) {
         Long userId = principal.getId();
-        List<ResidentGroupEntity> publicGroups = residentGroupRepository.findByVisibilityOrderByNameAsc(GroupVisibility.PUBLIC);
+        List<ResidentGroupEntity> allGroups = residentGroupRepository.findAllByOrderByNameAsc();
         List<Long> memberGroupIds = residentGroupMemberRepository.findGroupIdsByUserId(userId);
-        List<ResidentGroupEntity> memberGroups = memberGroupIds.isEmpty()
-                ? List.of()
-                : residentGroupRepository.findByIdInOrderByNameAsc(memberGroupIds);
-
-        Set<ResidentGroupEntity> visibleGroups = new LinkedHashSet<>(publicGroups);
-        visibleGroups.addAll(memberGroups);
-        List<Long> visibleGroupIds = visibleGroups.stream().map(ResidentGroupEntity::getId).toList();
+        List<Long> allGroupIds = allGroups.stream().map(ResidentGroupEntity::getId).toList();
         Map<Long, Long> memberCountByGroupId = new HashMap<>();
-        if (!visibleGroupIds.isEmpty()) {
-            residentGroupMemberRepository.countMembersByGroupIds(visibleGroupIds)
+        if (!allGroupIds.isEmpty()) {
+            residentGroupMemberRepository.countMembersByGroupIds(allGroupIds)
                     .forEach(row -> memberCountByGroupId.put(row.getGroupId(), row.getTotalCount()));
         }
         Set<Long> subscribedIds = new LinkedHashSet<>(memberGroupIds);
+        Map<Long, ResidentGroupJoinRequestEntity> viewerRequestsByGroupId = new HashMap<>();
+        for (ResidentGroupEntity group : allGroups) {
+            residentGroupJoinRequestRepository.findByGroupIdAndRequesterId(group.getId(), userId)
+                    .ifPresent(request -> viewerRequestsByGroupId.put(group.getId(), request));
+        }
 
         List<GroupResponse> response = new ArrayList<>();
-        for (ResidentGroupEntity group : visibleGroups) {
+        for (ResidentGroupEntity group : allGroups) {
+            ResidentGroupJoinRequestEntity viewerRequest = viewerRequestsByGroupId.get(group.getId());
             response.add(new GroupResponse(
                     group.getId(),
                     group.getSlug(),
@@ -67,6 +72,10 @@ public class GroupService {
                     group.getOwner().getId(),
                     group.getOwner().getFullName(),
                     subscribedIds.contains(group.getId()),
+                    viewerRequest != null && viewerRequest.getStatus() == JoinRequestStatus.PENDING,
+                    viewerRequest != null ? viewerRequest.getStatus().name() : null,
+                    group.getOwner().getId().equals(userId),
+                    residentGroupJoinRequestRepository.countByGroupIdAndStatus(group.getId(), JoinRequestStatus.PENDING),
                     memberCountByGroupId.getOrDefault(group.getId(), 0L)
             ));
         }
@@ -102,6 +111,10 @@ public class GroupService {
                 owner.getId(),
                 owner.getFullName(),
                 true,
+                false,
+                null,
+                true,
+                0,
                 1
         );
     }
@@ -113,13 +126,42 @@ public class GroupService {
         UserEntity user = userRepository.findById(principal.getId())
                 .orElseThrow(() -> new NotFoundException("User not found"));
 
+        if (residentGroupMemberRepository.existsByGroupIdAndUserId(groupId, user.getId())) {
+            return toGroupResponse(group, user.getId());
+        }
+
+        if (group.getVisibility() == GroupVisibility.PRIVATE && !group.getOwner().getId().equals(user.getId())) {
+            ResidentGroupJoinRequestEntity request = residentGroupJoinRequestRepository
+                    .findByGroupIdAndRequesterId(groupId, user.getId())
+                    .orElse(null);
+            if (request != null && request.getStatus() == JoinRequestStatus.REJECTED) {
+                log.info("Private group join request remains rejected groupId={} requesterUserId={}", groupId, user.getId());
+                return toGroupResponse(group, user.getId());
+            }
+            if (request == null) {
+                request = new ResidentGroupJoinRequestEntity();
+                request.setGroup(group);
+                request.setRequester(user);
+            }
+            request.setStatus(JoinRequestStatus.PENDING);
+            request.setReviewedAt(null);
+            residentGroupJoinRequestRepository.save(request);
+            log.info("Private group join request created groupId={} requesterUserId={}", groupId, user.getId());
+            return toGroupResponse(group, user.getId());
+        }
+
         if (!residentGroupMemberRepository.existsByGroupIdAndUserId(groupId, user.getId())) {
             ResidentGroupMemberEntity membership = new ResidentGroupMemberEntity();
             membership.setGroup(group);
             membership.setUser(user);
             residentGroupMemberRepository.save(membership);
         }
-        return toGroupResponse(group, true);
+        residentGroupJoinRequestRepository.findByGroupIdAndRequesterId(groupId, user.getId()).ifPresent(existing -> {
+            existing.setStatus(JoinRequestStatus.APPROVED);
+            existing.setReviewedAt(Instant.now());
+            residentGroupJoinRequestRepository.save(existing);
+        });
+        return toGroupResponse(group, user.getId());
     }
 
     @Transactional
@@ -130,7 +172,70 @@ public class GroupService {
             throw new IllegalArgumentException("Group owner cannot unsubscribe from own group");
         }
         residentGroupMemberRepository.deleteByGroupIdAndUserId(groupId, principal.getId());
-        return toGroupResponse(group, false);
+        residentGroupJoinRequestRepository.findByGroupIdAndRequesterId(groupId, principal.getId()).ifPresent(existing -> {
+            existing.setStatus(JoinRequestStatus.REJECTED);
+            existing.setReviewedAt(Instant.now());
+            residentGroupJoinRequestRepository.save(existing);
+        });
+        return toGroupResponse(group, principal.getId());
+    }
+
+    @Transactional(readOnly = true)
+    public List<GroupJoinRequestResponse> listPendingRequests(AppUserPrincipal principal) {
+        return residentGroupJoinRequestRepository.findByGroupOwnerIdAndStatusOrderByCreatedAtAsc(
+                        principal.getId(),
+                        JoinRequestStatus.PENDING
+                ).stream()
+                .map(request -> new GroupJoinRequestResponse(
+                        request.getId(),
+                        request.getGroup().getId(),
+                        request.getGroup().getName(),
+                        request.getRequester().getId(),
+                        request.getRequester().getFullName(),
+                        request.getRequester().getEmail(),
+                        request.getCreatedAt()
+                ))
+                .toList();
+    }
+
+    @Transactional
+    public GroupJoinRequestResponse approveRequest(AppUserPrincipal principal, Long requestId) {
+        ResidentGroupJoinRequestEntity request = requireOwnerRequest(principal.getId(), requestId);
+        if (!residentGroupMemberRepository.existsByGroupIdAndUserId(request.getGroup().getId(), request.getRequester().getId())) {
+            ResidentGroupMemberEntity membership = new ResidentGroupMemberEntity();
+            membership.setGroup(request.getGroup());
+            membership.setUser(request.getRequester());
+            residentGroupMemberRepository.save(membership);
+        }
+        request.setStatus(JoinRequestStatus.APPROVED);
+        request.setReviewedAt(Instant.now());
+        residentGroupJoinRequestRepository.save(request);
+        return new GroupJoinRequestResponse(
+                request.getId(),
+                request.getGroup().getId(),
+                request.getGroup().getName(),
+                request.getRequester().getId(),
+                request.getRequester().getFullName(),
+                request.getRequester().getEmail(),
+                request.getCreatedAt()
+        );
+    }
+
+    @Transactional
+    public GroupJoinRequestResponse rejectRequest(AppUserPrincipal principal, Long requestId) {
+        ResidentGroupJoinRequestEntity request = requireOwnerRequest(principal.getId(), requestId);
+        request.setStatus(JoinRequestStatus.REJECTED);
+        request.setReviewedAt(Instant.now());
+        residentGroupJoinRequestRepository.save(request);
+        return new GroupJoinRequestResponse(
+                request.getId(),
+                request.getGroup().getId(),
+                request.getGroup().getName(),
+                request.getRequester().getId(),
+                request.getRequester().getFullName(),
+                request.getRequester().getEmail(),
+                request.getCreatedAt()
+        );
     }
 
     @Transactional(readOnly = true)
@@ -165,11 +270,15 @@ public class GroupService {
         return group;
     }
 
-    private GroupResponse toGroupResponse(ResidentGroupEntity group, boolean subscribed) {
+    private GroupResponse toGroupResponse(ResidentGroupEntity group, Long userId) {
         long count = residentGroupMemberRepository.countMembersByGroupIds(List.of(group.getId())).stream()
                 .findFirst()
                 .map(GroupMemberCountProjection::getTotalCount)
                 .orElse(0L);
+        boolean subscribed = residentGroupMemberRepository.existsByGroupIdAndUserId(group.getId(), userId);
+        ResidentGroupJoinRequestEntity viewerRequest = residentGroupJoinRequestRepository.findByGroupIdAndRequesterId(group.getId(), userId)
+                .orElse(null);
+        boolean requestPending = viewerRequest != null && viewerRequest.getStatus() == JoinRequestStatus.PENDING;
         return new GroupResponse(
                 group.getId(),
                 group.getSlug(),
@@ -179,8 +288,21 @@ public class GroupService {
                 group.getOwner().getId(),
                 group.getOwner().getFullName(),
                 subscribed,
+                requestPending,
+                viewerRequest != null ? viewerRequest.getStatus().name() : null,
+                group.getOwner().getId().equals(userId),
+                residentGroupJoinRequestRepository.countByGroupIdAndStatus(group.getId(), JoinRequestStatus.PENDING),
                 count
         );
+    }
+
+    private ResidentGroupJoinRequestEntity requireOwnerRequest(Long ownerUserId, Long requestId) {
+        ResidentGroupJoinRequestEntity request = residentGroupJoinRequestRepository.findById(requestId)
+                .orElseThrow(() -> new NotFoundException("Join request not found"));
+        if (!request.getGroup().getOwner().getId().equals(ownerUserId)) {
+            throw new IllegalArgumentException("Only the group owner can review requests");
+        }
+        return request;
     }
 
     private GroupVisibility parseVisibility(String rawVisibility) {

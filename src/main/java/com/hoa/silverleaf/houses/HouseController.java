@@ -27,14 +27,14 @@ public class HouseController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('HOA_ADMIN')")
+    @PreAuthorize("hasAnyRole('HOA_ADMIN', 'ADMIN')")
     public List<HouseResponse> houses() {
         log.info("House list requested by HOA admin");
         return houseService.listHouses();
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('HOA_ADMIN')")
+    @PreAuthorize("hasAnyRole('HOA_ADMIN', 'ADMIN')")
     @ResponseStatus(HttpStatus.CREATED)
     public HouseResponse create(@Valid @RequestBody CreateHouseRequest request) {
         log.info("House create requested addressLength={}", request.address() == null ? 0 : request.address().length());

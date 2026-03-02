@@ -29,6 +29,9 @@ public class UserEntity {
     @Column(name = "phone_number", length = 40)
     private String phoneNumber;
 
+    @Column(name = "address_visible", nullable = false)
+    private boolean addressVisible;
+
     @Column(name = "service_enabled", nullable = false)
     private boolean serviceEnabled;
 
@@ -114,6 +117,14 @@ public class UserEntity {
 
     public void setPhoneNumber(String phoneNumber) {
         this.phoneNumber = phoneNumber;
+    }
+
+    public boolean isAddressVisible() {
+        return addressVisible;
+    }
+
+    public void setAddressVisible(boolean addressVisible) {
+        this.addressVisible = addressVisible;
     }
 
     public boolean isServiceEnabled() {
