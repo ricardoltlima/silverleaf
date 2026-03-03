@@ -37,6 +37,7 @@ const menuLinks = [
 ];
 
 const boardAdminLinks = [
+  { to: "/hoa/workspace", label: "Workspace" },
   { to: "/board/news", label: "Board News" },
   { to: "/board/broadcasts", label: "Message Everyone" },
   { to: "/board/polls", label: "Polls" }
@@ -280,27 +281,9 @@ export function AppShell() {
             <button
               type="button"
               onClick={() => setHoaExpanded((current) => !current)}
-              className={`mb-2 flex w-full items-center justify-between rounded-2xl border px-3 py-3 text-left transition ${
-                hoaExpanded
-                  ? "border-leaf-200 bg-[linear-gradient(135deg,_#f7fbf4_0%,_#eef6f0_55%,_#f8fafc_100%)] shadow-sm"
-                  : "border-slate-200 bg-white hover:border-leaf-200 hover:bg-[linear-gradient(135deg,_#fbfdf9_0%,_#f4f8f5_100%)]"
-              }`}
+              className="mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100"
             >
-              <span className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[linear-gradient(135deg,_#3f7f52_0%,_#6aa26b_100%)] text-white shadow-sm ring-1 ring-leaf-200/60">
-                  <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current stroke-[1.8]">
-                    <path d="M3 10.5 12 4l9 6.5" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M5.5 9.5V20h13V9.5" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M9 20v-5.5h6V20" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                <span className="flex flex-col">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-leaf-700">
-                    Silverleaf
-                  </span>
-                  <span className="text-sm font-semibold text-slate-900">HOA</span>
-                </span>
-              </span>
+              <span>HOA</span>
               <span
                 className={`flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-all ${
                   hoaExpanded ? "rotate-180 border-leaf-200 text-leaf-700" : ""
@@ -312,7 +295,7 @@ export function AppShell() {
               </span>
             </button>
             <div
-              className={`overflow-hidden rounded-2xl bg-slate-50/85 pl-3 transition-all duration-300 ${
+              className={`overflow-hidden pl-3 transition-all duration-300 ${
                 hoaExpanded ? "max-h-72 opacity-100" : "max-h-0 opacity-0"
               }`}
             >
@@ -330,28 +313,6 @@ export function AppShell() {
               >
                 Clubhouse Form
               </button>
-              {isAdmin ? (
-                <NavLink
-                  to="/hoa/workspace"
-                  className={({ isActive }) =>
-                    `mb-1 block w-full rounded-lg px-3 py-2 text-left text-sm transition ${
-                      isActive ? "bg-leaf-50 text-leaf-900" : "text-slate-600 hover:bg-slate-100"
-                    }`
-                  }
-                >
-                  HOA Workspace
-                </NavLink>
-              ) : null}
-              <NavLink
-                to="/reservations"
-                className={({ isActive }) =>
-                  `mb-1 block w-full rounded-lg px-3 py-2 text-left text-sm transition ${
-                    isActive ? "bg-leaf-50 text-leaf-900" : "text-slate-600 hover:bg-slate-100"
-                  }`
-                }
-              >
-                Reservations Calendar
-              </NavLink>
               <NavLink
                 to="/report-violation"
                 className={({ isActive }) =>
