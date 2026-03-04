@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   fetchConversations,
@@ -23,6 +23,7 @@ export function MessagesPanel({ layout = "page", onClose, initialSelectedUserId 
   const queryClient = useQueryClient();
   const [selectedUserId, setSelectedUserId] = useState<number | null>(initialSelectedUserId);
   const [draft, setDraft] = useState("");
+  const threadContainerRef = useRef<HTMLDivElement | null>(null);
 
   const meQuery = useQuery({
     queryKey: ["me"],
@@ -61,6 +62,14 @@ export function MessagesPanel({ layout = "page", onClose, initialSelectedUserId 
       setSelectedUserId(initialSelectedUserId);
     }
   }, [initialSelectedUserId]);
+
+  useEffect(() => {
+    const container = threadContainerRef.current;
+    if (!container) {
+      return;
+    }
+    container.scrollTop = container.scrollHeight;
+  }, [selectedUserId, threadQuery.data]);
 
   const markReadMutation = useMutation({
     mutationFn: markThreadAsRead,
@@ -162,7 +171,7 @@ export function MessagesPanel({ layout = "page", onClose, initialSelectedUserId 
           ) : null}
         </header>
 
-        <div className="flex-1 overflow-y-auto bg-slate-50 p-4">
+        <div ref={threadContainerRef} className="flex-1 overflow-y-auto bg-slate-50 p-4">
           {threadQuery.isLoading ? <p className="text-sm text-slate-500">Loading messages...</p> : null}
           {(threadQuery.data ?? []).map((message) => {
             const mine = message.senderUserId === meQuery.data?.id;

@@ -4,7 +4,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { BrowserRouter } from "react-router-dom";
 import { AppRoutes } from "./app/routes";
+import { applyTheme, getStoredTheme } from "./lib/themeStorage";
 import "./styles.css";
+
+applyTheme(getStoredTheme());
 
 const queryClient = new QueryClient({
   defaultOptions: {

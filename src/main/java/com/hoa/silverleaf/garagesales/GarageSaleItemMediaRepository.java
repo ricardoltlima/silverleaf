@@ -6,4 +6,6 @@ import java.util.List;
 
 public interface GarageSaleItemMediaRepository extends JpaRepository<GarageSaleItemMediaEntity, Long> {
     List<GarageSaleItemMediaEntity> findByItemIdInOrderBySortOrderAscIdAsc(List<Long> itemIds);
+
+    void deleteByItemId(Long itemId);
 }

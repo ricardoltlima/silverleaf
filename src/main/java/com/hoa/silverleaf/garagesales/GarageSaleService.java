@@ -6,10 +6,12 @@ import com.hoa.silverleaf.garagesales.dto.CreateGarageSaleItemMediaRequest;
 import com.hoa.silverleaf.garagesales.dto.CreateGarageSaleItemRequest;
 import com.hoa.silverleaf.garagesales.dto.GarageSaleItemMediaResponse;
 import com.hoa.silverleaf.garagesales.dto.GarageSaleItemResponse;
+import com.hoa.silverleaf.garagesales.dto.UpdateGarageSaleItemRequest;
 import com.hoa.silverleaf.security.AppUserPrincipal;
 import com.hoa.silverleaf.users.UserEntity;
 import com.hoa.silverleaf.users.UserRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -84,6 +86,28 @@ public class GarageSaleService {
         return toResponse(saved, mediaResponses);
     }
 
+    @Transactional
+    public GarageSaleItemResponse updateItem(AppUserPrincipal principal, Long itemId, UpdateGarageSaleItemRequest request) {
+        GarageSaleItemEntity item = requireItemInCommunity(itemId, principal);
+        requireItemManager(item, principal);
+        item.setTitle(request.title().trim());
+        item.setPriceLabel(request.price().trim());
+        item.setConditionLabel(request.condition().trim());
+        item.setCategory(request.category().trim());
+        item.setDescription(trimToNull(request.description()));
+        GarageSaleItemEntity saved = garageSaleItemRepository.save(item);
+        List<GarageSaleItemMediaResponse> media = loadMediaByItemIds(List.of(itemId)).getOrDefault(itemId, List.of());
+        return toResponse(saved, media);
+    }
+
+    @Transactional
+    public void deleteItem(AppUserPrincipal principal, Long itemId) {
+        GarageSaleItemEntity item = requireItemInCommunity(itemId, principal);
+        requireItemManager(item, principal);
+        garageSaleItemMediaRepository.deleteByItemId(itemId);
+        garageSaleItemRepository.delete(item);
+    }
+
     private Map<Long, List<GarageSaleItemMediaResponse>> loadMediaByItemIds(List<Long> itemIds) {
         if (itemIds.isEmpty()) {
             return Map.of();
@@ -119,5 +143,17 @@ public class GarageSaleService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private GarageSaleItemEntity requireItemInCommunity(Long itemId, AppUserPrincipal principal) {
+        return garageSaleItemRepository.findByIdAndCommunityId(itemId, communityAccessService.requireCommunityIdForPrincipal(principal))
+                .orElseThrow(() -> new NotFoundException("Garage sale item not found"));
+    }
+
+    private void requireItemManager(GarageSaleItemEntity item, AppUserPrincipal principal) {
+        if (item.getSeller().getId().equals(principal.getId()) || communityAccessService.isCurrentCommunityAdmin(principal)) {
+            return;
+        }
+        throw new AccessDeniedException("You cannot manage this listing");
     }
 }

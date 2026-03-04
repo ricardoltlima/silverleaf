@@ -8,6 +8,7 @@ import {
   updateMyProfile,
   uploadMyProfilePhoto
 } from "@/features/users/currentUserApi";
+import { getStoredTheme, setStoredTheme, type AppTheme } from "@/lib/themeStorage";
 
 type PersonalForm = {
   fullName: string;
@@ -78,6 +79,7 @@ export function ProfilePage() {
   });
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [photoDraft, setPhotoDraft] = useState<string | null>(null);
+  const [theme, setTheme] = useState<AppTheme>(getStoredTheme());
 
   const uploadPhotoMutation = useMutation({
     mutationFn: uploadMyProfilePhoto,
@@ -164,6 +166,17 @@ export function ProfilePage() {
     uploadPhotoMutation.mutate(file);
   };
 
+  useEffect(() => {
+    const onThemeChanged = (event: Event) => {
+      const customEvent = event as CustomEvent<AppTheme>;
+      setTheme(customEvent.detail);
+    };
+    window.addEventListener("silverleaf-theme-changed", onThemeChanged as EventListener);
+    return () => {
+      window.removeEventListener("silverleaf-theme-changed", onThemeChanged as EventListener);
+    };
+  }, []);
+
   return (
     <div className="space-y-4">
       <section className="card p-4">
@@ -174,6 +187,30 @@ export function ProfilePage() {
         <p className="mt-1 text-sm text-slate-600">
           Update your personal details and optionally advertise services to neighbors.
         </p>
+      </section>
+
+      <section className="card p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="app-section-title text-slate-900">Appearance</h3>
+            <p className="mt-1 text-sm text-slate-600">Switch between light and dark mode for the app.</p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={theme === "dark"}
+            onClick={() => setStoredTheme(theme === "dark" ? "light" : "dark")}
+            className={`relative inline-flex h-8 w-14 items-center rounded-full transition ${
+              theme === "dark" ? "bg-slate-900" : "bg-slate-300"
+            }`}
+          >
+            <span
+              className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition ${
+                theme === "dark" ? "translate-x-7" : "translate-x-1"
+              }`}
+            />
+          </button>
+        </div>
       </section>
 
       <section className="card p-4">

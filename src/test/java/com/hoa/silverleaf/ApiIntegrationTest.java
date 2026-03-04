@@ -1534,6 +1534,73 @@ class ApiIntegrationTest {
     }
 
     @Test
+    void garageSaleSellerCanUpdateAndDeleteOwnListing() throws Exception {
+        createUser("garage.owner@example.com", "Passw0rd!", UserRole.RESIDENT, true);
+        createUser("garage.viewer@example.com", "Passw0rd!", UserRole.RESIDENT, true);
+        String ownerToken = loginAndGetAccessToken("garage.owner@example.com", "Passw0rd!");
+        String viewerToken = loginAndGetAccessToken("garage.viewer@example.com", "Passw0rd!");
+
+        MvcResult createResult = mockMvc.perform(post("/api/v1/garage-sales")
+                        .header("Authorization", "Bearer " + ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Patio Table",
+                                  "price": "$80",
+                                  "condition": "Used - Good",
+                                  "category": "Home Goods",
+                                  "description": "Round patio table",
+                                  "media": []
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        long itemId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asLong();
+
+        mockMvc.perform(put("/api/v1/garage-sales/" + itemId)
+                        .header("Authorization", "Bearer " + viewerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Hacked Listing",
+                                  "price": "$1",
+                                  "condition": "Used - Fair",
+                                  "category": "Classified",
+                                  "description": "Should not work"
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(put("/api/v1/garage-sales/" + itemId)
+                        .header("Authorization", "Bearer " + ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Patio Table Set",
+                                  "price": "$95",
+                                  "condition": "Used - Excellent",
+                                  "category": "Home Goods",
+                                  "description": "Table with two chairs"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Patio Table Set"))
+                .andExpect(jsonPath("$.price").value("$95"))
+                .andExpect(jsonPath("$.condition").value("Used - Excellent"))
+                .andExpect(jsonPath("$.description").value("Table with two chairs"));
+
+        mockMvc.perform(delete("/api/v1/garage-sales/" + itemId)
+                        .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/v1/garage-sales")
+                        .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
     void directMessagesCannotCrossCommunityBoundaries() throws Exception {
         createUser("default.message.sender@example.com", "Passw0rd!", UserRole.RESIDENT, true);
         createUser("other.message.recipient@example.com", "Passw0rd!", UserRole.RESIDENT, true);

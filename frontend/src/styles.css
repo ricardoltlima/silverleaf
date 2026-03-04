@@ -9,6 +9,11 @@
     @apply bg-slate-100 text-slate-900;
     font-family: Inter, "SF Pro Text", Roboto, "Helvetica Neue", Arial, sans-serif;
   }
+
+  .dark-mode body {
+    background: #0f172a;
+    color: #e2e8f0;
+  }
 }
 
 @layer components {
@@ -64,4 +69,83 @@
     font-weight: 500;
     line-height: 1.5;
   }
+}
+
+.dark-mode .card,
+.dark-mode .bg-white {
+  background-color: #111827 !important;
+}
+
+.dark-mode .bg-slate-50 {
+  background-color: #0f172a !important;
+}
+
+.dark-mode .bg-slate-100 {
+  background-color: #020617 !important;
+}
+
+.dark-mode .border-slate-200,
+.dark-mode .border-slate-300,
+.dark-mode .border-white {
+  border-color: #334155 !important;
+}
+
+.dark-mode .text-slate-900 {
+  color: #f8fafc !important;
+}
+
+.dark-mode .text-slate-800 {
+  color: #e2e8f0 !important;
+}
+
+.dark-mode .text-slate-700 {
+  color: #cbd5e1 !important;
+}
+
+.dark-mode .text-slate-600,
+.dark-mode .text-slate-500 {
+  color: #94a3b8 !important;
+}
+
+.dark-mode .hover\:bg-slate-100:hover,
+.dark-mode .hover\:bg-slate-50:hover {
+  background-color: #1e293b !important;
+}
+
+.dark-mode .bg-leaf-50 {
+  background-color: rgba(47, 107, 69, 0.18) !important;
+}
+
+.dark-mode .bg-indigo-50 {
+  background-color: rgba(99, 102, 241, 0.16) !important;
+}
+
+.dark-mode .bg-amber-50,
+.dark-mode .bg-amber-50\/60,
+.dark-mode .bg-amber-50\/70 {
+  background-color: rgba(245, 158, 11, 0.12) !important;
+}
+
+.dark-mode .bg-emerald-50,
+.dark-mode .bg-emerald-50\/70 {
+  background-color: rgba(16, 185, 129, 0.14) !important;
+}
+
+.dark-mode .bg-rose-50,
+.dark-mode .bg-rose-50\/40,
+.dark-mode .bg-rose-50\/50 {
+  background-color: rgba(244, 63, 94, 0.12) !important;
+}
+
+.dark-mode input,
+.dark-mode textarea,
+.dark-mode select {
+  background-color: #0f172a !important;
+  color: #e2e8f0 !important;
+  border-color: #334155 !important;
+}
+
+.dark-mode input::placeholder,
+.dark-mode textarea::placeholder {
+  color: #64748b !important;
 }

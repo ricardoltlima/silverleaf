@@ -353,7 +353,7 @@ export function AppShell() {
                   <img src={link.icon} alt="" className="mb-1 h-5 w-5" />
                   <span>{link.label}</span>
                   {(unreadCountQuery.data?.unreadCount ?? 0) > 0 ? (
-                    <span className="absolute right-2 top-1 rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                    <span className="absolute right-2 top-1 inline-flex min-w-6 items-center justify-center rounded-[999px] border border-rose-200/60 bg-rose-100/75 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-rose-700 shadow-[0_6px_16px_rgba(244,63,94,0.12)] backdrop-blur-sm">
                       {unreadCountQuery.data?.unreadCount}
                     </span>
                   ) : null}

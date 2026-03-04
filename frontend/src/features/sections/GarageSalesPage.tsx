@@ -6,8 +6,10 @@ import { uploadFeedMedia } from "@/features/feed/feedApi";
 import { fetchCurrentUser } from "@/features/users/currentUserApi";
 import {
   createGarageSaleItem,
+  deleteGarageSaleItem,
   fetchGarageSaleItems,
-  type GarageSaleItem
+  type GarageSaleItem,
+  updateGarageSaleItem
 } from "@/features/sections/garageSalesApi";
 
 const defaultAvatar =
@@ -48,6 +50,27 @@ export function GarageSalesPage() {
       queryClient.setQueryData<GarageSaleItem[]>(GARAGE_SALES_QUERY_KEY, (current) => [created, ...(current ?? [])]);
     }
   });
+  const updateItemMutation = useMutation({
+    mutationFn: ({ itemId, payload }: { itemId: number; payload: Parameters<typeof updateGarageSaleItem>[1] }) =>
+      updateGarageSaleItem(itemId, payload),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<GarageSaleItem[]>(GARAGE_SALES_QUERY_KEY, (current) =>
+        (current ?? []).map((item) => (item.id === updated.id ? updated : item))
+      );
+      setSelectedItem(updated);
+      setEditingListing(false);
+    }
+  });
+  const deleteItemMutation = useMutation({
+    mutationFn: (itemId: number) => deleteGarageSaleItem(itemId),
+    onSuccess: (_, itemId) => {
+      queryClient.setQueryData<GarageSaleItem[]>(GARAGE_SALES_QUERY_KEY, (current) =>
+        (current ?? []).filter((item) => item.id !== itemId)
+      );
+      setSelectedItem(null);
+      setEditingListing(false);
+    }
+  });
   const meQuery = useQuery({
     queryKey: ["me"],
     queryFn: fetchCurrentUser
@@ -59,6 +82,7 @@ export function GarageSalesPage() {
   const [activeCategory, setActiveCategory] = useState<GarageSaleCategory | "ALL">("ALL");
   const [sortBy, setSortBy] = useState<SortOption>("NEWEST");
   const [selectedItem, setSelectedItem] = useState<GarageSaleItem | null>(null);
+  const [editingListing, setEditingListing] = useState(false);
   const [sellOpen, setSellOpen] = useState(false);
   const [formTitle, setFormTitle] = useState("");
   const [formPrice, setFormPrice] = useState("");
@@ -66,6 +90,11 @@ export function GarageSalesPage() {
   const [formCategory, setFormCategory] = useState<GarageSaleCategory>("Classified");
   const [formDescription, setFormDescription] = useState("");
   const [formMedia, setFormMedia] = useState<FeedMedia[]>([]);
+  const [editTitle, setEditTitle] = useState("");
+  const [editPrice, setEditPrice] = useState("");
+  const [editCondition, setEditCondition] = useState("Used - Good");
+  const [editCategory, setEditCategory] = useState<GarageSaleCategory>("Classified");
+  const [editDescription, setEditDescription] = useState("");
 
   const visibleItems = useMemo(() => {
     const items = itemsQuery.data ?? [];
@@ -95,6 +124,15 @@ export function GarageSalesPage() {
   const formatPrice = (value: string) => {
     const trimmed = value.trim();
     return trimmed.startsWith("$") ? trimmed : `$${trimmed}`;
+  };
+
+  const startEditingItem = (item: GarageSaleItem) => {
+    setEditTitle(item.title);
+    setEditPrice(item.price.replace(/^\$/, ""));
+    setEditCondition(item.condition);
+    setEditCategory((GARAGE_SALE_CATEGORIES.includes(item.category as GarageSaleCategory) ? item.category : "Classified") as GarageSaleCategory);
+    setEditDescription(item.description || "");
+    setEditingListing(true);
   };
 
   const onCreateProduct = (event: FormEvent) => {
@@ -299,18 +337,121 @@ export function GarageSalesPage() {
               </div>
             )}
 
-            <div className="mt-4 grid gap-3 text-slate-700">
-              <p className="feed-author-name text-leaf-700">{formatPrice(selectedItem.price)}</p>
-              <p>
-                <span className="feed-meta text-slate-900">Condition:</span>{" "}
-                <span className="feed-post-copy">{selectedItem.condition}</span>
-              </p>
-            </div>
-            <p className="feed-post-copy mt-3 text-slate-700">{selectedItem.description || "No description provided."}</p>
-
-            {selectedItem.sellerUserId === meQuery.data?.id ? (
-              <p className="mt-4 text-xs text-slate-500">This is your listing.</p>
-            ) : null}
+            {editingListing ? (
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <label className="text-sm md:col-span-2">
+                  <span className="mb-1 block text-slate-600">Product title</span>
+                  <input
+                    value={editTitle}
+                    onChange={(event) => setEditTitle(event.target.value)}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-leaf-600 focus:ring-2"
+                  />
+                </label>
+                <label className="text-sm">
+                  <span className="mb-1 block text-slate-600">Price</span>
+                  <input
+                    value={editPrice}
+                    onChange={(event) => setEditPrice(event.target.value)}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-leaf-600 focus:ring-2"
+                  />
+                </label>
+                <label className="text-sm">
+                  <span className="mb-1 block text-slate-600">Condition</span>
+                  <select
+                    value={editCondition}
+                    onChange={(event) => setEditCondition(event.target.value)}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-leaf-600 focus:ring-2"
+                  >
+                    <option>Used - Like New</option>
+                    <option>Used - Excellent</option>
+                    <option>Used - Good</option>
+                    <option>Used - Fair</option>
+                    <option>New</option>
+                  </select>
+                </label>
+                <label className="text-sm">
+                  <span className="mb-1 block text-slate-600">Category</span>
+                  <select
+                    value={editCategory}
+                    onChange={(event) => setEditCategory(event.target.value as GarageSaleCategory)}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-leaf-600 focus:ring-2"
+                  >
+                    {GARAGE_SALE_CATEGORIES.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-sm md:col-span-2">
+                  <span className="mb-1 block text-slate-600">Description</span>
+                  <textarea
+                    value={editDescription}
+                    onChange={(event) => setEditDescription(event.target.value)}
+                    rows={4}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-leaf-600 focus:ring-2"
+                  />
+                </label>
+                <div className="md:col-span-2 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingListing(false)}
+                    className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={updateItemMutation.isPending}
+                    onClick={() =>
+                      updateItemMutation.mutate({
+                        itemId: selectedItem.id,
+                        payload: {
+                          title: editTitle.trim(),
+                          price: formatPrice(editPrice),
+                          condition: editCondition,
+                          category: editCategory,
+                          description: editDescription.trim() || null
+                        }
+                      })
+                    }
+                    className="rounded-lg bg-leaf-600 px-4 py-2 text-sm font-medium text-white hover:bg-leaf-700 disabled:opacity-70"
+                  >
+                    Save changes
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="mt-4 grid gap-3 text-slate-700">
+                  <p className="feed-author-name text-leaf-700">{formatPrice(selectedItem.price)}</p>
+                  <p>
+                    <span className="feed-meta text-slate-900">Condition:</span>{" "}
+                    <span className="feed-post-copy">{selectedItem.condition}</span>
+                  </p>
+                </div>
+                <p className="feed-post-copy mt-3 text-slate-700">{selectedItem.description || "No description provided."}</p>
+                {selectedItem.sellerUserId === meQuery.data?.id ? (
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => startEditingItem(selectedItem)}
+                      className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                    >
+                      Edit product
+                    </button>
+                    <button
+                      type="button"
+                      disabled={deleteItemMutation.isPending}
+                      onClick={() => deleteItemMutation.mutate(selectedItem.id)}
+                      className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-70"
+                    >
+                      Delete product
+                    </button>
+                  </div>
+                ) : null}
+              </>
+            )}
           </div>
         </div>
       ) : null}
