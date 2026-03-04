@@ -7,6 +7,10 @@ public record MeResponse(
         String email,
         String fullName,
         UserRole role,
-        String photoUrl
+        String photoUrl,
+        Long activeCommunityId,
+        String activeCommunitySlug,
+        String activeCommunityName,
+        boolean communityAdmin
 ) {
 }

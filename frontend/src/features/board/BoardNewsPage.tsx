@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createNews, deleteNews, fetchNews, updateNews } from "@/features/board/boardApi";
 import { uploadFeedMedia } from "@/features/feed/feedApi";
 import { fetchCurrentUser } from "@/features/users/currentUserApi";
-import { isHoaManager } from "@/features/users/roleUtils";
+import { canManageCommunity } from "@/features/users/roleUtils";
 
 function isVideoUrl(url: string): boolean {
   const value = url.toLowerCase();
@@ -13,7 +13,7 @@ function isVideoUrl(url: string): boolean {
 export function BoardNewsPage() {
   const queryClient = useQueryClient();
   const meQuery = useQuery({ queryKey: ["me"], queryFn: fetchCurrentUser });
-  const isAdmin = isHoaManager(meQuery.data?.role);
+  const isAdmin = canManageCommunity(meQuery.data);
   const newsQuery = useQuery({ queryKey: ["board", "news"], queryFn: fetchNews });
 
   const [title, setTitle] = useState("");
@@ -50,7 +50,7 @@ export function BoardNewsPage() {
   });
 
   const uploadMutation = useMutation({
-    mutationFn: uploadFeedMedia,
+    mutationFn: (file: File) => uploadFeedMedia(file),
     onSuccess: (uploaded) => {
       setMediaUrls((current) => [...current, uploaded.url]);
     }
@@ -97,7 +97,7 @@ export function BoardNewsPage() {
   return (
     <div className="space-y-4">
       {!isAdmin ? (
-        <section className="card p-4 text-sm text-rose-700">Only HOA admins can access this page.</section>
+        <section className="card p-4 text-sm text-rose-700">Only community admins can access this page.</section>
       ) : null}
 
       <section className="card p-4">

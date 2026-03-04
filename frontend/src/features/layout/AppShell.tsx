@@ -1,25 +1,30 @@
 import { useEffect, useMemo, useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { clearTokens } from "@/lib/authStorage";
+import { clearTokens, getActiveCommunity, getRefreshToken, setTokens } from "@/lib/authStorage";
+import { switchCommunity } from "@/features/auth/authApi";
+import { fetchReactionAlerts } from "@/features/alerts/alertsApi";
 import { RightRail } from "@/features/layout/RightRail";
 import { ProfilePhotoEditorModal } from "@/features/layout/ProfilePhotoEditorModal";
 import { CommunityStandardsModal } from "@/features/hoa/CommunityStandardsModal";
 import { ClubhouseFormModal } from "@/features/hoa/ClubhouseFormModal";
 import { MessagesModal } from "@/features/messages/MessagesModal";
 import { fetchUnreadCount } from "@/features/messages/messagesApi";
-import { fetchFeed } from "@/features/feed/feedApi";
+import { fetchFeed, fetchReportedPosts } from "@/features/feed/feedApi";
 import { getUnreadGroupPosts } from "@/features/groups/groupAlerts";
 import { fetchGroupRequests } from "@/features/groups/groupsApi";
+import { getLastSeenGroupRequestsAt } from "@/features/groups/groupRequestsStorage";
 import { fetchAllViolations } from "@/features/board/boardApi";
+import { getLastSeenReportsAt } from "@/features/board/reportsStorage";
 import { getLastSeenViolationsAt } from "@/features/board/violationsStorage";
 import {
   fetchCurrentUser,
+  fetchMyCommunities,
   fetchMyHousehold,
   uploadMyProfilePhoto,
   type CurrentUser
 } from "@/features/users/currentUserApi";
-import { isHoaManager, isSystemAdmin } from "@/features/users/roleUtils";
+import { canManageCommunity, isSystemAdmin } from "@/features/users/roleUtils";
 
 const links = [
   { to: "/community", label: "Home", icon: "/icon-home.svg", type: "route" as const },
@@ -40,8 +45,18 @@ const boardAdminLinks = [
   { to: "/hoa/workspace", label: "Workspace" },
   { to: "/board/news", label: "Board News" },
   { to: "/board/broadcasts", label: "Message Everyone" },
-  { to: "/board/polls", label: "Polls" }
+  { to: "/board/polls", label: "Polls" },
+  { to: "/board/reports", label: "Reports" }
 ];
+
+const communityAdminRoutes = new Set([
+  "/hoa/workspace",
+  "/board/news",
+  "/board/broadcasts",
+  "/board/polls",
+  "/board/reports",
+  "/violations"
+]);
 
 function dataUrlToFile(dataUrl: string, fileName: string): File {
   const [header, content] = dataUrl.split(",");
@@ -57,6 +72,8 @@ function dataUrlToFile(dataUrl: string, fileName: string): File {
 
 export function AppShell() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [messagesTargetUserId, setMessagesTargetUserId] = useState<number | null>(null);
   const meQuery = useQuery({
@@ -67,6 +84,10 @@ export function AppShell() {
     queryKey: ["my-household"],
     queryFn: fetchMyHousehold,
     retry: false
+  });
+  const communitiesQuery = useQuery({
+    queryKey: ["me", "communities"],
+    queryFn: fetchMyCommunities
   });
   const [hoaExpanded, setHoaExpanded] = useState(false);
   const [openDoc, setOpenDoc] = useState<null | "community-standards" | "clubhouse-form">(null);
@@ -87,7 +108,12 @@ export function AppShell() {
     queryFn: fetchGroupRequests,
     refetchInterval: 5000
   });
-  const isAdmin = isHoaManager(meQuery.data?.role);
+  const reactionAlertsQuery = useQuery({
+    queryKey: ["alerts", "reactions", "badge"],
+    queryFn: fetchReactionAlerts,
+    refetchInterval: 5000
+  });
+  const isAdmin = canManageCommunity(meQuery.data);
   const isSystem = isSystemAdmin(meQuery.data?.role);
   const violationsQuery = useQuery({
     queryKey: ["violations", "alerts", "badge"],
@@ -95,8 +121,16 @@ export function AppShell() {
     enabled: isAdmin,
     refetchInterval: 5000
   });
+  const reportsQuery = useQuery({
+    queryKey: ["feed", "reports", "badge"],
+    queryFn: fetchReportedPosts,
+    enabled: isAdmin,
+    refetchInterval: 5000
+  });
   const [groupSeenVersion, setGroupSeenVersion] = useState(0);
+  const [groupRequestsSeenVersion, setGroupRequestsSeenVersion] = useState(0);
   const [violationsSeenVersion, setViolationsSeenVersion] = useState(0);
+  const [reportsSeenVersion, setReportsSeenVersion] = useState(0);
 
   useEffect(() => {
     const onSeenChange = () => setGroupSeenVersion((current) => current + 1);
@@ -111,6 +145,22 @@ export function AppShell() {
     window.addEventListener("silverleaf-violations-seen-changed", onSeenChange);
     return () => {
       window.removeEventListener("silverleaf-violations-seen-changed", onSeenChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onSeenChange = () => setGroupRequestsSeenVersion((current) => current + 1);
+    window.addEventListener("silverleaf-group-requests-seen-changed", onSeenChange);
+    return () => {
+      window.removeEventListener("silverleaf-group-requests-seen-changed", onSeenChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onSeenChange = () => setReportsSeenVersion((current) => current + 1);
+    window.addEventListener("silverleaf-reports-seen-changed", onSeenChange);
+    return () => {
+      window.removeEventListener("silverleaf-reports-seen-changed", onSeenChange);
     };
   }, []);
 
@@ -130,6 +180,15 @@ export function AppShell() {
     () => getUnreadGroupPosts(groupAlertsQuery.data?.items ?? []).length,
     [groupAlertsQuery.data?.items, groupSeenVersion]
   );
+  const unreadGroupRequestsCount = useMemo(() => {
+    const lastSeenAt = getLastSeenGroupRequestsAt();
+    return (groupRequestsQuery.data ?? []).filter((request) => {
+      if (!lastSeenAt) {
+        return true;
+      }
+      return new Date(request.createdAt).getTime() > new Date(lastSeenAt).getTime();
+    }).length;
+  }, [groupRequestsQuery.data, groupRequestsSeenVersion]);
   const unreadViolationAlertsCount = useMemo(() => {
     if (!isAdmin) {
       return 0;
@@ -145,8 +204,24 @@ export function AppShell() {
       return new Date(item.createdAt).getTime() > new Date(lastSeenAt).getTime();
     }).length;
   }, [isAdmin, violationsQuery.data, violationsSeenVersion]);
+  const unreadReactionAlertsCount = useMemo(
+    () => (reactionAlertsQuery.data ?? []).filter((item) => item.unread).length,
+    [reactionAlertsQuery.data]
+  );
+  const unreadReportsCount = useMemo(() => {
+    if (!isAdmin) {
+      return 0;
+    }
+    const lastSeenAt = getLastSeenReportsAt();
+    return (reportsQuery.data ?? []).filter((item) => {
+      if (!lastSeenAt) {
+        return true;
+      }
+      return new Date(item.latestReportedAt).getTime() > new Date(lastSeenAt).getTime();
+    }).length;
+  }, [isAdmin, reportsQuery.data, reportsSeenVersion]);
   const unreadAlertsCount =
-    unreadGroupAlertsCount + (groupRequestsQuery.data?.length ?? 0) + unreadViolationAlertsCount;
+    unreadGroupAlertsCount + unreadGroupRequestsCount + unreadViolationAlertsCount + unreadReactionAlertsCount;
 
   useEffect(() => {
     if (meQuery.data?.photoUrl !== undefined) {
@@ -165,6 +240,63 @@ export function AppShell() {
           detail: updatedMe.photoUrl || null
         })
       );
+    }
+  });
+
+  const switchCommunityMutation = useMutation({
+    mutationFn: async (communityId: number) => {
+      const refreshToken = getRefreshToken();
+      if (!refreshToken) {
+        throw new Error("Refresh token missing");
+      }
+      return switchCommunity(communityId, refreshToken);
+    },
+    onSuccess: async (result) => {
+      setTokens(result.accessToken, result.refreshToken, {
+        id: result.activeCommunityId,
+        slug: result.activeCommunitySlug,
+        name: result.activeCommunityName
+      });
+
+      const [nextMe, nextCommunities, nextHousehold] = await Promise.all([
+        fetchCurrentUser(),
+        fetchMyCommunities(),
+        fetchMyHousehold()
+      ]);
+
+      queryClient.removeQueries({
+        predicate: (query) => {
+          const [root, second] = query.queryKey;
+          return !(
+            root === "me" ||
+            (root === "my-household" && second === undefined)
+          );
+        }
+      });
+
+      queryClient.setQueryData<CurrentUser>(["me"], nextMe);
+      queryClient.setQueryData(["me", "communities"], nextCommunities);
+      queryClient.setQueryData(["my-household"], nextHousehold);
+      setProfilePhoto(nextMe.photoUrl);
+      window.dispatchEvent(
+        new CustomEvent("silverleaf-profile-photo-changed", {
+          detail: nextMe.photoUrl || null
+        })
+      );
+
+      await queryClient.invalidateQueries({
+        predicate: (query) => {
+          const [root, second] = query.queryKey;
+          return !(
+            root === "me" ||
+            (root === "my-household" && second === undefined)
+          );
+        }
+      });
+
+      if (communityAdminRoutes.has(location.pathname) && !canManageCommunity(nextMe)) {
+        navigate("/community", { replace: true });
+      }
     }
   });
 
@@ -192,6 +324,13 @@ export function AppShell() {
   };
 
   const closeDocModal = () => setOpenDoc(null);
+  const activeMembership = communitiesQuery.data?.find((membership) => membership.active);
+  const activeCommunityName = activeMembership?.communityName ?? meQuery.data?.activeCommunityName ?? null;
+  const activeScopeLabel = isSystem
+    ? "System Admin"
+    : isAdmin
+      ? "Community Admin"
+      : "Resident Access";
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -232,7 +371,7 @@ export function AppShell() {
                   <img src={link.icon} alt="" className="mb-1 h-5 w-5" />
                   <span>{link.label}</span>
                   {link.to === "/alerts" && unreadAlertsCount > 0 ? (
-                    <span className="absolute right-2 top-1 rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                    <span className="absolute right-2 top-1 inline-flex min-w-6 items-center justify-center rounded-[999px] border border-rose-200/60 bg-rose-100/75 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-rose-700 shadow-[0_6px_16px_rgba(244,63,94,0.12)] backdrop-blur-sm">
                       {unreadAlertsCount}
                     </span>
                   ) : null}
@@ -274,6 +413,47 @@ export function AppShell() {
               <p className="text-xs text-slate-500">
                 {householdQuery.data?.houseAddress || "Address not set"}
               </p>
+              <div className="mt-3 flex flex-wrap justify-center gap-2">
+                {activeCommunityName ? (
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+                    {activeCommunityName}
+                  </span>
+                ) : null}
+                <span
+                  className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+                    isSystem
+                      ? "bg-slate-900 text-white"
+                      : isAdmin
+                        ? "bg-indigo-100 text-indigo-800"
+                        : "bg-emerald-100 text-emerald-800"
+                  }`}
+                >
+                  {activeScopeLabel}
+                </span>
+              </div>
+              {communitiesQuery.data && communitiesQuery.data.length > 1 ? (
+                <div className="mt-3 text-left">
+                  <label htmlFor="community-switcher" className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Active community
+                  </label>
+                  <select
+                    id="community-switcher"
+                    value={getActiveCommunity()?.id ?? meQuery.data?.activeCommunityId ?? ""}
+                    onChange={(event) => switchCommunityMutation.mutate(Number(event.target.value))}
+                    disabled={switchCommunityMutation.isPending}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none ring-leaf-600 focus:ring-2"
+                  >
+                    {communitiesQuery.data.map((membership) => (
+                      <option key={membership.communityId} value={membership.communityId}>
+                        {membership.communityName}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-2 text-[11px] text-slate-500">
+                    Switching communities also switches your access scope for HOA tools in this session.
+                  </p>
+                </div>
+              ) : null}
             </div>
           </section>
 
@@ -360,12 +540,17 @@ export function AppShell() {
                     key={item.to}
                     to={item.to}
                     className={({ isActive }) =>
-                      `mb-1 block w-full rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
+                      `relative mb-1 block w-full rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
                         isActive ? "bg-indigo-50 text-indigo-900" : "text-slate-700 hover:bg-slate-100"
                       }`
                     }
                   >
                     {item.label}
+                    {item.to === "/board/reports" && unreadReportsCount > 0 ? (
+                      <span className="absolute right-3 top-1/2 inline-flex min-w-6 -translate-y-1/2 items-center justify-center rounded-[999px] border border-rose-200/60 bg-rose-100/75 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-rose-700 shadow-[0_6px_16px_rgba(244,63,94,0.12)] backdrop-blur-sm">
+                        {unreadReportsCount}
+                      </span>
+                    ) : null}
                   </NavLink>
                 ))}
               </div>

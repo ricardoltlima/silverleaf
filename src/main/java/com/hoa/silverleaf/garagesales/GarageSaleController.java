@@ -28,9 +28,9 @@ public class GarageSaleController {
     }
 
     @GetMapping
-    public List<GarageSaleItemResponse> list() {
+    public List<GarageSaleItemResponse> list(@AuthenticationPrincipal AppUserPrincipal principal) {
         log.debug("Garage sale items list requested");
-        return garageSaleService.listItems();
+        return garageSaleService.listItems(principal);
     }
 
     @PostMapping

@@ -21,7 +21,7 @@ export function ReportViolationPage() {
   });
 
   const uploadMutation = useMutation({
-    mutationFn: uploadFeedMedia,
+    mutationFn: (file: File) => uploadFeedMedia(file, true),
     onSuccess: (uploaded) => {
       setMediaUrls((current) => [...current, uploaded.url]);
     }

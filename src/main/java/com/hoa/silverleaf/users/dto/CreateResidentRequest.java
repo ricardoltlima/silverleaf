@@ -9,6 +9,7 @@ public record CreateResidentRequest(
         @NotBlank @Size(max = 120) String fullName,
         @Email @NotBlank String email,
         @NotBlank @Size(min = 8, max = 72) String password,
-        UserRole role
+        UserRole role,
+        Boolean communityAdmin
 ) {
 }

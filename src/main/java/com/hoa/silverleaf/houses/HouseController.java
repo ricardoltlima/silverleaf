@@ -2,6 +2,7 @@ package com.hoa.silverleaf.houses;
 
 import com.hoa.silverleaf.houses.dto.CreateHouseRequest;
 import com.hoa.silverleaf.houses.dto.HouseResponse;
+import com.hoa.silverleaf.security.AppUserPrincipal;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -27,17 +28,20 @@ public class HouseController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('HOA_ADMIN', 'ADMIN')")
-    public List<HouseResponse> houses() {
+    @PreAuthorize("@communityAccessService.isCurrentCommunityAdmin(authentication.principal)")
+    public List<HouseResponse> houses(@org.springframework.security.core.annotation.AuthenticationPrincipal AppUserPrincipal principal) {
         log.info("House list requested by HOA admin");
-        return houseService.listHouses();
+        return houseService.listHouses(principal);
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('HOA_ADMIN', 'ADMIN')")
+    @PreAuthorize("@communityAccessService.isCurrentCommunityAdmin(authentication.principal)")
     @ResponseStatus(HttpStatus.CREATED)
-    public HouseResponse create(@Valid @RequestBody CreateHouseRequest request) {
+    public HouseResponse create(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal AppUserPrincipal principal,
+            @Valid @RequestBody CreateHouseRequest request
+    ) {
         log.info("House create requested addressLength={}", request.address() == null ? 0 : request.address().length());
-        return houseService.createHouse(request);
+        return houseService.createHouse(principal, request);
     }
 }

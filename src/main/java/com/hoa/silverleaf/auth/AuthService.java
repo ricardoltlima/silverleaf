@@ -4,6 +4,13 @@ import com.hoa.silverleaf.auth.dto.AuthRequest;
 import com.hoa.silverleaf.auth.dto.AuthResponse;
 import com.hoa.silverleaf.auth.dto.RefreshRequest;
 import com.hoa.silverleaf.auth.dto.RegisterRequest;
+import com.hoa.silverleaf.auth.dto.SwitchCommunityRequest;
+import com.hoa.silverleaf.community.CommunityEntity;
+import com.hoa.silverleaf.community.CommunityAccessService;
+import com.hoa.silverleaf.community.CommunityRepository;
+import com.hoa.silverleaf.community.ResidentCommunityMembershipRepository;
+import com.hoa.silverleaf.community.ResidentCommunityMembershipService;
+import com.hoa.silverleaf.security.AppUserPrincipal;
 import com.hoa.silverleaf.security.JwtProperties;
 import com.hoa.silverleaf.security.JwtService;
 import com.hoa.silverleaf.users.UserEntity;
@@ -31,6 +38,10 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final JwtProperties jwtProperties;
+    private final ResidentCommunityMembershipService residentCommunityMembershipService;
+    private final CommunityAccessService communityAccessService;
+    private final CommunityRepository communityRepository;
+    private final ResidentCommunityMembershipRepository residentCommunityMembershipRepository;
 
     public AuthService(
             UserRepository userRepository,
@@ -38,7 +49,11 @@ public class AuthService {
             AuthenticationManager authenticationManager,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
-            JwtProperties jwtProperties
+            JwtProperties jwtProperties,
+            ResidentCommunityMembershipService residentCommunityMembershipService,
+            CommunityAccessService communityAccessService,
+            CommunityRepository communityRepository,
+            ResidentCommunityMembershipRepository residentCommunityMembershipRepository
     ) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
@@ -46,6 +61,10 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.jwtProperties = jwtProperties;
+        this.residentCommunityMembershipService = residentCommunityMembershipService;
+        this.communityAccessService = communityAccessService;
+        this.communityRepository = communityRepository;
+        this.residentCommunityMembershipRepository = residentCommunityMembershipRepository;
     }
 
     @Transactional
@@ -63,9 +82,10 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setRole(UserRole.RESIDENT);
         UserEntity savedUser = userRepository.save(user);
+        residentCommunityMembershipService.ensureDefaultMembership(savedUser);
         log.info("User registered successfully. userId={}, email={}", savedUser.getId(), savedUser.getEmail());
 
-        return issueTokens(savedUser);
+        return issueTokens(savedUser, communityAccessService.requireCommunityForUser(savedUser.getId()));
     }
 
     @Transactional
@@ -81,7 +101,7 @@ public class AuthService {
                 .orElseThrow(() -> new IllegalArgumentException("Invalid credentials"));
         log.info("User authenticated successfully. userId={}, email={}", user.getId(), user.getEmail());
 
-        return issueTokens(user);
+        return issueTokens(user, communityAccessService.requireCommunityForUser(user.getId()));
     }
 
     @Transactional
@@ -100,21 +120,50 @@ public class AuthService {
         refreshTokenRepository.deleteByExpiresAtBeforeOrRevokedIsTrue(Instant.now());
         log.info("Refresh token rotated for userId={}", token.getUser().getId());
 
-        return issueTokens(token.getUser());
+        return issueTokens(token.getUser(), token.getActiveCommunity());
     }
 
-    private AuthResponse issueTokens(UserEntity user) {
+    @Transactional
+    public AuthResponse switchCommunity(AppUserPrincipal principal, SwitchCommunityRequest request) {
+        CommunityEntity targetCommunity = communityRepository.findById(request.communityId())
+                .orElseThrow(() -> new IllegalArgumentException("Community not found"));
+        if (!residentCommunityMembershipRepository.existsByResidentIdAndCommunityIdAndActiveTrue(principal.getId(), targetCommunity.getId())) {
+            throw new IllegalArgumentException("Community is not available for this resident");
+        }
+
+        RefreshTokenEntity currentToken = refreshTokenRepository.findByToken(request.refreshToken().trim())
+                .orElseThrow(() -> new IllegalArgumentException("Invalid refresh token"));
+        if (!currentToken.getUser().getId().equals(principal.getId()) || currentToken.isRevoked()) {
+            throw new IllegalArgumentException("Invalid refresh token");
+        }
+        currentToken.setRevoked(true);
+        refreshTokenRepository.save(currentToken);
+
+        UserEntity user = userRepository.findById(principal.getId())
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        return issueTokens(user, targetCommunity);
+    }
+
+    private AuthResponse issueTokens(UserEntity user, CommunityEntity activeCommunity) {
         Instant accessExpiresAt = Instant.now().plus(jwtProperties.getAccessTokenMinutes(), ChronoUnit.MINUTES);
-        String accessToken = jwtService.generateAccessToken(user);
+        String accessToken = jwtService.generateAccessToken(user, activeCommunity);
         String refreshToken = UUID.randomUUID().toString().replace("-", "");
 
         RefreshTokenEntity refreshTokenEntity = new RefreshTokenEntity();
         refreshTokenEntity.setToken(refreshToken);
         refreshTokenEntity.setUser(user);
+        refreshTokenEntity.setActiveCommunity(activeCommunity);
         refreshTokenEntity.setExpiresAt(Instant.now().plus(jwtProperties.getRefreshTokenDays(), ChronoUnit.DAYS));
         refreshTokenRepository.save(refreshTokenEntity);
         log.debug("Tokens issued for userId={} with access expiry={}", user.getId(), accessExpiresAt);
 
-        return new AuthResponse(accessToken, refreshToken, accessExpiresAt);
+        return new AuthResponse(
+                accessToken,
+                refreshToken,
+                accessExpiresAt,
+                activeCommunity.getId(),
+                activeCommunity.getSlug(),
+                activeCommunity.getName()
+        );
     }
 }

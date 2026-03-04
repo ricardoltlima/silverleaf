@@ -38,3 +38,10 @@ export function acceptResidentInvitation(invitationToken: string) {
     method: "POST"
   });
 }
+
+export function switchCommunity(communityId: number, refreshToken: string) {
+  return apiClient<AuthResponse>("/api/v1/auth/switch-community", {
+    method: "POST",
+    body: { communityId, refreshToken }
+  });
+}

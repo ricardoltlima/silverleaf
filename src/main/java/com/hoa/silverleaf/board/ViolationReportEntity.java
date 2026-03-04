@@ -1,5 +1,6 @@
 package com.hoa.silverleaf.board;
 
+import com.hoa.silverleaf.community.CommunityEntity;
 import com.hoa.silverleaf.users.UserEntity;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -13,6 +14,10 @@ public class ViolationReportEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "community_id", nullable = false)
+    private CommunityEntity community;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "reporter_user_id", nullable = false)
@@ -40,6 +45,8 @@ public class ViolationReportEntity {
     private Instant updatedAt;
 
     public Long getId() { return id; }
+    public CommunityEntity getCommunity() { return community; }
+    public void setCommunity(CommunityEntity community) { this.community = community; }
     public UserEntity getReporter() { return reporter; }
     public void setReporter(UserEntity reporter) { this.reporter = reporter; }
     public String getDescription() { return description; }

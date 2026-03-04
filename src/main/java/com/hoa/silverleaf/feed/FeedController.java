@@ -5,13 +5,17 @@ import com.hoa.silverleaf.feed.dto.CreateFeedCommentRequest;
 import com.hoa.silverleaf.feed.dto.FeedCommentResponse;
 import com.hoa.silverleaf.feed.dto.FeedCommentReactionResponse;
 import com.hoa.silverleaf.feed.dto.FeedLikeResponse;
+import com.hoa.silverleaf.feed.dto.FeedModerationReportResponse;
 import com.hoa.silverleaf.feed.dto.FeedPageResponse;
 import com.hoa.silverleaf.feed.dto.FeedPostResponse;
+import com.hoa.silverleaf.feed.dto.UpdateFeedCommentRequest;
+import com.hoa.silverleaf.feed.dto.UpdateFeedPostRequest;
 import com.hoa.silverleaf.feed.dto.UploadMediaResponse;
 import com.hoa.silverleaf.security.AppUserPrincipal;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.multipart.MultipartFile;
 
 @Slf4j
@@ -102,6 +107,27 @@ public class FeedController {
         return feedService.addComment(postId, principal, request);
     }
 
+    @PutMapping("/posts/{postId}")
+    public FeedPostResponse updatePost(
+            @AuthenticationPrincipal AppUserPrincipal principal,
+            @PathVariable Long postId,
+            @Valid @RequestBody UpdateFeedPostRequest request
+    ) {
+        log.info("Feed post update requested postId={} userId={}", postId, principal.getId());
+        return feedService.updatePost(postId, principal, request);
+    }
+
+    @PutMapping("/posts/{postId}/comments/{commentId}")
+    public FeedCommentResponse updateComment(
+            @AuthenticationPrincipal AppUserPrincipal principal,
+            @PathVariable Long postId,
+            @PathVariable Long commentId,
+            @Valid @RequestBody UpdateFeedCommentRequest request
+    ) {
+        log.info("Feed comment update requested postId={} commentId={} userId={}", postId, commentId, principal.getId());
+        return feedService.updateComment(postId, commentId, principal, request);
+    }
+
     @PostMapping("/posts/{postId}/comments/{commentId}/likes")
     public FeedCommentReactionResponse reactToComment(
             @AuthenticationPrincipal AppUserPrincipal principal,
@@ -125,6 +151,17 @@ public class FeedController {
         return feedService.clearCommentReaction(commentId, principal);
     }
 
+    @PostMapping("/posts/{postId}/comments/{commentId}/reports")
+    @ResponseStatus(HttpStatus.CREATED)
+    public void reportComment(
+            @AuthenticationPrincipal AppUserPrincipal principal,
+            @PathVariable Long postId,
+            @PathVariable Long commentId
+    ) {
+        log.info("Feed comment report requested postId={} commentId={} userId={}", postId, commentId, principal.getId());
+        feedService.reportComment(postId, commentId, principal);
+    }
+
     @DeleteMapping("/posts/{postId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deletePost(
@@ -132,6 +169,54 @@ public class FeedController {
             @PathVariable Long postId
     ) {
         log.info("Feed post delete requested postId={} userId={}", postId, principal.getId());
-        feedService.deleteOwnPost(postId, principal);
+        feedService.deletePost(postId, principal);
+    }
+
+    @DeleteMapping("/posts/{postId}/comments/{commentId}")
+    public FeedCommentResponse deleteComment(
+            @AuthenticationPrincipal AppUserPrincipal principal,
+            @PathVariable Long postId,
+            @PathVariable Long commentId
+    ) {
+        log.info("Feed comment delete requested postId={} commentId={} userId={}", postId, commentId, principal.getId());
+        return feedService.deleteComment(postId, commentId, principal);
+    }
+
+    @PostMapping("/posts/{postId}/reports")
+    @ResponseStatus(HttpStatus.CREATED)
+    public void reportPost(
+            @AuthenticationPrincipal AppUserPrincipal principal,
+            @PathVariable Long postId
+    ) {
+        log.info("Feed post report requested postId={} userId={}", postId, principal.getId());
+        feedService.reportPost(postId, principal);
+    }
+
+    @GetMapping("/reports")
+    @PreAuthorize("@communityAccessService.isCurrentCommunityAdmin(authentication.principal)")
+    public java.util.List<FeedModerationReportResponse> listReports(@AuthenticationPrincipal AppUserPrincipal principal) {
+        return feedService.listReportedPosts(principal);
+    }
+
+    @DeleteMapping("/reports/posts/{postId}")
+    @PreAuthorize("@communityAccessService.isCurrentCommunityAdmin(authentication.principal)")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteReportedPost(
+            @AuthenticationPrincipal AppUserPrincipal principal,
+            @PathVariable Long postId
+    ) {
+        log.info("Reported feed post delete requested postId={} userId={}", postId, principal.getId());
+        feedService.deleteReportedPost(postId, principal);
+    }
+
+    @DeleteMapping("/reports/comments/{commentId}")
+    @PreAuthorize("@communityAccessService.isCurrentCommunityAdmin(authentication.principal)")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteReportedComment(
+            @AuthenticationPrincipal AppUserPrincipal principal,
+            @PathVariable Long commentId
+    ) {
+        log.info("Reported feed comment delete requested commentId={} userId={}", commentId, principal.getId());
+        feedService.deleteReportedComment(commentId, principal);
     }
 }

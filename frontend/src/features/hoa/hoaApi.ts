@@ -8,6 +8,7 @@ export type ResidentDirectoryItem = {
   fullName: string;
   role: UserRole;
   enabled: boolean;
+  communityAdmin: boolean;
 };
 
 type ResidentsPage = {
@@ -45,6 +46,7 @@ export function createResidentInvitation(payload: {
   password: string;
   houseId: number;
   role: Exclude<UserRole, "ADMIN">;
+  communityAdmin: boolean;
 }) {
   return apiClient<ResidentInvitationResult>("/api/v1/residents/invitations", {
     method: "POST",
@@ -59,6 +61,7 @@ export function updateManagedResident(
     email: string;
     password: string | null;
     role: UserRole;
+    communityAdmin: boolean;
   }
 ) {
   return apiClient<ResidentDirectoryItem>(`/api/v1/residents/${residentId}`, {

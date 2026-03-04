@@ -11,6 +11,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 
 import java.time.Instant;
 
@@ -38,6 +39,15 @@ public class GlobalExceptionHandler {
     ) {
         log.warn("Constraint violation at {}: {}", request.getRequestURI(), ex.getMessage());
         return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request.getRequestURI());
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiErrorResponse> handleUnreadableMessage(
+            HttpMessageNotReadableException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Unreadable request body at {}: {}", request.getRequestURI(), ex.getMessage());
+        return build(HttpStatus.BAD_REQUEST, "Invalid request body", request.getRequestURI());
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

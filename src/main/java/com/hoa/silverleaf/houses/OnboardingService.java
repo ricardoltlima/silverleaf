@@ -4,6 +4,7 @@ import com.hoa.silverleaf.common.NotFoundException;
 import com.hoa.silverleaf.auth.AuthService;
 import com.hoa.silverleaf.auth.dto.AuthResponse;
 import com.hoa.silverleaf.auth.dto.RegisterRequest;
+import com.hoa.silverleaf.community.ResidentCommunityMembershipService;
 import com.hoa.silverleaf.houses.dto.HouseResponse;
 import com.hoa.silverleaf.houses.dto.LocalOnboardingLoginResponse;
 import com.hoa.silverleaf.houses.dto.PublicResidentInvitationResponse;
@@ -50,6 +51,7 @@ public class OnboardingService {
     private final AuthService authService;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ResidentCommunityMembershipService residentCommunityMembershipService;
 
     public OnboardingService(
             HouseRepository houseRepository,
@@ -61,7 +63,8 @@ public class OnboardingService {
             ResidentInvitationRepository residentInvitationRepository,
             AuthService authService,
             UserRepository userRepository,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            ResidentCommunityMembershipService residentCommunityMembershipService
     ) {
         this.houseRepository = houseRepository;
         this.houseResidentRepository = houseResidentRepository;
@@ -73,6 +76,7 @@ public class OnboardingService {
         this.authService = authService;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.residentCommunityMembershipService = residentCommunityMembershipService;
     }
 
     @Transactional
@@ -267,6 +271,7 @@ public class OnboardingService {
         resident.setActive(true);
         resident.setMovedInAt(Instant.now());
         houseResidentRepository.save(resident);
+        residentCommunityMembershipService.activateMembership(residentUser, house.getCommunity());
 
         house.setStatus(HouseStatus.OCCUPIED);
         if (house.getClaimedAt() == null) {
@@ -339,6 +344,7 @@ public class OnboardingService {
             resident.setMovedInAt(Instant.now());
             houseResidentRepository.save(resident);
         }
+        residentCommunityMembershipService.activateMembership(invitation.getResident(), invitation.getHouse().getCommunity());
 
         invitation.getHouse().setStatus(HouseStatus.OCCUPIED);
         if (invitation.getHouse().getClaimedAt() == null) {

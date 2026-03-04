@@ -9,6 +9,7 @@ export type FeedMedia = {
 
 export type FeedComment = {
   id: number;
+  postId?: number;
   authorUserId: number;
   authorName: string;
   authorPhotoUrl?: string | null;
@@ -33,8 +34,6 @@ export type FeedPost = {
     contactEmail: string | null;
     businessUrl: string | null;
     hours: string | null;
-    serviceArea: string | null;
-    visibility: "PUBLIC" | "GROUPS" | null;
   } | null;
   text: string | null;
   createdAt: string;

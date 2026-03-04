@@ -20,7 +20,7 @@ export function LoginPage() {
   const remembered = getRememberedLogin();
   const invitationToken = searchParams.get("invite")?.trim() || "";
 
-  const [identifier, setIdentifier] = useState(remembered?.identifier ?? "ricardoltlima@gmail.com");
+  const [identifier, setIdentifier] = useState(remembered?.identifier ?? "");
   const [password, setPassword] = useState("myPassw0rd!");
   const [houseId, setHouseId] = useState<number | "">(remembered?.houseId ?? "");
   const [localMessage, setLocalMessage] = useState<string>("");
@@ -72,7 +72,11 @@ export function LoginPage() {
   const loginMutation = useMutation({
     mutationFn: login,
     onSuccess: async (result) => {
-      setTokens(result.accessToken, result.refreshToken);
+      setTokens(result.accessToken, result.refreshToken, {
+        id: result.activeCommunityId,
+        slug: result.activeCommunitySlug,
+        name: result.activeCommunityName
+      });
       if (invitationToken) {
         await acceptResidentInvitation(invitationToken);
       }
@@ -88,6 +92,8 @@ export function LoginPage() {
   });
 
   const hasInvitation = !!invitationQuery.data;
+  const googleConfigured = !!configQuery.data?.googleClientId;
+  const invitationResidentName = invitationQuery.data?.fullName?.trim() || "";
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -152,8 +158,10 @@ export function LoginPage() {
               <h2 className="text-2xl font-semibold text-slate-900">Log in</h2>
               <p className="mt-1 text-sm text-slate-500">
                 {hasInvitation
-                  ? "Your HOA invitation has prefilled your address and email."
-                  : "Use your resident credentials. Social login UI is ready for remote auth wiring."}
+                  ? invitationResidentName
+                    ? `Your HOA invitation has prefilled ${invitationResidentName}'s address and email.`
+                    : "Your HOA invitation has prefilled your address and email."
+                  : "Use your resident credentials to sign in."}
               </p>
             </div>
             {remembered?.houseAddress ? (
@@ -246,25 +254,30 @@ export function LoginPage() {
 
           <div className="my-6 flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-slate-400">
             <div className="h-px flex-1 bg-slate-200" />
-            Or
+            Other access
             <div className="h-px flex-1 bg-slate-200" />
           </div>
 
           <div className="space-y-3">
             <button
               type="button"
-              className="flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+              disabled
+              className="flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-500 shadow-sm disabled:cursor-not-allowed disabled:opacity-80"
             >
               <span className="text-base font-semibold text-rose-500">G</span>
-              Continue with Google
+              {googleConfigured ? "Google access coming soon" : "Google access unavailable"}
             </button>
             <button
               type="button"
-              className="flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+              disabled
+              className="flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-500 shadow-sm disabled:cursor-not-allowed disabled:opacity-80"
             >
               <span className="text-base font-semibold text-blue-600">f</span>
-              Continue with Facebook
+              Facebook access not available yet
             </button>
+            <p className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-500">
+              Invitation acceptance is live. Self-serve onboarding and social sign-in are not exposed on this screen yet.
+            </p>
           </div>
         </section>
       </div>

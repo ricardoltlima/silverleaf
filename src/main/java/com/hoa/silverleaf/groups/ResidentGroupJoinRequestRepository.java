@@ -7,7 +7,10 @@ import java.util.Optional;
 
 public interface ResidentGroupJoinRequestRepository extends JpaRepository<ResidentGroupJoinRequestEntity, Long> {
     Optional<ResidentGroupJoinRequestEntity> findByGroupIdAndRequesterId(Long groupId, Long requesterId);
-    List<ResidentGroupJoinRequestEntity> findByGroupOwnerIdAndStatusOrderByCreatedAtAsc(Long ownerId, JoinRequestStatus status);
+    List<ResidentGroupJoinRequestEntity> findByGroupOwnerIdAndGroupCommunityIdAndStatusOrderByCreatedAtAsc(
+            Long ownerId,
+            Long communityId,
+            JoinRequestStatus status
+    );
     long countByGroupIdAndStatus(Long groupId, JoinRequestStatus status);
 }
-

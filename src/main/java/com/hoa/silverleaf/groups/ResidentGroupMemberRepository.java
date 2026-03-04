@@ -12,8 +12,11 @@ public interface ResidentGroupMemberRepository extends JpaRepository<ResidentGro
     boolean existsByGroupIdAndUserId(Long groupId, Long userId);
     void deleteByGroupIdAndUserId(Long groupId, Long userId);
 
-    @Query("select m.group.id from ResidentGroupMemberEntity m where m.user.id = :userId")
-    List<Long> findGroupIdsByUserId(@Param("userId") Long userId);
+    @Query("""
+            select m.group.id from ResidentGroupMemberEntity m
+            where m.user.id = :userId and m.group.community.id = :communityId
+            """)
+    List<Long> findGroupIdsByUserIdAndCommunityId(@Param("userId") Long userId, @Param("communityId") Long communityId);
 
     @Query("""
             select m.group.id as groupId, count(m.id) as totalCount

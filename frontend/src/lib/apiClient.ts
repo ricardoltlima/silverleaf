@@ -1,4 +1,4 @@
-import { getAccessToken } from "@/lib/authStorage";
+import { clearTokens, getAccessToken, getRefreshToken, setTokens } from "@/lib/authStorage";
 
 export class ApiError extends Error {
   status: number;
@@ -16,35 +16,9 @@ type ApiOptions = {
   auth?: boolean;
 };
 
-export async function apiClient<T>(path: string, options: ApiOptions = {}): Promise<T> {
-  const { method = "GET", body, headers = {}, auth = true } = options;
+let refreshInFlight: Promise<string | null> | null = null;
 
-  const requestHeaders: Record<string, string> = {
-    ...headers
-  };
-
-  if (body !== undefined && !(body instanceof FormData)) {
-    requestHeaders["Content-Type"] = "application/json";
-  }
-
-  if (auth) {
-    const token = getAccessToken();
-    if (token) {
-      requestHeaders.Authorization = `Bearer ${token}`;
-    }
-  }
-
-  const response = await fetch(path, {
-    method,
-    headers: requestHeaders,
-    body:
-      body === undefined
-        ? undefined
-        : body instanceof FormData
-          ? body
-          : JSON.stringify(body)
-  });
-
+async function parseResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let message = `HTTP ${response.status}`;
     try {
@@ -63,4 +37,84 @@ export async function apiClient<T>(path: string, options: ApiOptions = {}): Prom
   }
 
   return (await response.json()) as T;
+}
+
+async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) {
+    return null;
+  }
+  if (!refreshInFlight) {
+    refreshInFlight = (async () => {
+      const response = await fetch("/api/v1/auth/refresh", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ refreshToken })
+      });
+      if (!response.ok) {
+        clearTokens();
+        return null;
+      }
+      const payload = (await response.json()) as {
+        accessToken: string;
+        refreshToken: string;
+        activeCommunityId: number;
+        activeCommunitySlug: string;
+        activeCommunityName: string;
+      };
+      setTokens(payload.accessToken, payload.refreshToken, {
+        id: payload.activeCommunityId,
+        slug: payload.activeCommunitySlug,
+        name: payload.activeCommunityName
+      });
+      return payload.accessToken;
+    })().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+}
+
+async function performRequest(path: string, options: ApiOptions, tokenOverride?: string | null): Promise<Response> {
+  const { method = "GET", body, headers = {}, auth = true } = options;
+
+  const requestHeaders: Record<string, string> = {
+    ...headers
+  };
+
+  if (body !== undefined && !(body instanceof FormData)) {
+    requestHeaders["Content-Type"] = "application/json";
+  }
+
+  if (auth) {
+    const token = tokenOverride ?? getAccessToken();
+    if (token) {
+      requestHeaders.Authorization = `Bearer ${token}`;
+    }
+  }
+
+  return fetch(path, {
+    method,
+    headers: requestHeaders,
+    body:
+      body === undefined
+        ? undefined
+        : body instanceof FormData
+          ? body
+          : JSON.stringify(body)
+  });
+}
+
+export async function apiClient<T>(path: string, options: ApiOptions = {}): Promise<T> {
+  const response = await performRequest(path, options);
+  if (response.status === 401 && options.auth !== false) {
+    const refreshedToken = await refreshAccessToken();
+    if (refreshedToken) {
+      const retryResponse = await performRequest(path, options, refreshedToken);
+      return parseResponse<T>(retryResponse);
+    }
+  }
+  return parseResponse<T>(response);
 }

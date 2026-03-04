@@ -4,12 +4,14 @@ import { MediaCarousel } from "@/features/layout/MediaCarousel";
 import type { FeedMedia } from "@/features/feed/types";
 import { uploadFeedMedia } from "@/features/feed/feedApi";
 import { fetchCurrentUser } from "@/features/users/currentUserApi";
-import { sendMessage } from "@/features/messages/messagesApi";
 import {
   createGarageSaleItem,
   fetchGarageSaleItems,
   type GarageSaleItem
 } from "@/features/sections/garageSalesApi";
+
+const defaultAvatar =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 72'%3E%3Crect width='72' height='72' fill='%23d6e6f8'/%3E%3Ccircle cx='36' cy='27' r='14' fill='%23a5bfdc'/%3E%3Cellipse cx='36' cy='60' rx='22' ry='14' fill='%23a5bfdc'/%3E%3C/svg%3E";
 
 const GARAGE_SALE_CATEGORIES = [
   "Vehicles",
@@ -50,17 +52,8 @@ export function GarageSalesPage() {
     queryKey: ["me"],
     queryFn: fetchCurrentUser
   });
-  const sendMessageMutation = useMutation({
-    mutationFn: ({ recipientUserId, body }: { recipientUserId: number; body: string }) =>
-      sendMessage(recipientUserId, body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["messages", "conversations"] });
-      queryClient.invalidateQueries({ queryKey: ["messages", "unread-count"] });
-      setMessageToSeller("");
-    }
-  });
   const mediaUploadMutation = useMutation({
-    mutationFn: uploadFeedMedia
+    mutationFn: (file: File) => uploadFeedMedia(file)
   });
 
   const [activeCategory, setActiveCategory] = useState<GarageSaleCategory | "ALL">("ALL");
@@ -73,7 +66,6 @@ export function GarageSalesPage() {
   const [formCategory, setFormCategory] = useState<GarageSaleCategory>("Classified");
   const [formDescription, setFormDescription] = useState("");
   const [formMedia, setFormMedia] = useState<FeedMedia[]>([]);
-  const [messageToSeller, setMessageToSeller] = useState("");
 
   const visibleItems = useMemo(() => {
     const items = itemsQuery.data ?? [];
@@ -99,6 +91,11 @@ export function GarageSalesPage() {
   }, [activeCategory, itemsQuery.data, sortBy]);
 
   const hasItems = visibleItems.length > 0;
+
+  const formatPrice = (value: string) => {
+    const trimmed = value.trim();
+    return trimmed.startsWith("$") ? trimmed : `$${trimmed}`;
+  };
 
   const onCreateProduct = (event: FormEvent) => {
     event.preventDefault();
@@ -258,9 +255,32 @@ export function GarageSalesPage() {
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-3 flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-xl font-semibold text-slate-900">{selectedItem.title}</h3>
-                <p className="text-lg font-bold text-leaf-700">{selectedItem.price}</p>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() =>
+                    window.dispatchEvent(new CustomEvent("silverleaf-open-messages", { detail: selectedItem.sellerUserId }))
+                  }
+                  className="shrink-0"
+                >
+                  <img
+                    src={selectedItem.sellerPhotoUrl || defaultAvatar}
+                    alt={`${selectedItem.sellerName} profile`}
+                    className="h-14 w-14 rounded-full border border-slate-200 object-cover shadow-sm"
+                  />
+                </button>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      window.dispatchEvent(new CustomEvent("silverleaf-open-messages", { detail: selectedItem.sellerUserId }))
+                    }
+                    className="feed-author-name text-left text-slate-900 transition hover:text-leaf-700"
+                  >
+                    {selectedItem.sellerName}
+                  </button>
+                  <p className="feed-meta mt-1 text-slate-500">{new Date(selectedItem.createdAt).toLocaleString()}</p>
+                </div>
               </div>
               <button
                 type="button"
@@ -279,60 +299,18 @@ export function GarageSalesPage() {
               </div>
             )}
 
-            <div className="grid gap-2 text-sm text-slate-700 md:grid-cols-2">
+            <div className="mt-4 grid gap-3 text-slate-700">
+              <p className="feed-author-name text-leaf-700">{formatPrice(selectedItem.price)}</p>
               <p>
-                <span className="font-semibold text-slate-900">Condition:</span> {selectedItem.condition}
-              </p>
-              <p>
-                <span className="font-semibold text-slate-900">Category:</span> {selectedItem.category}
-              </p>
-              <p>
-                <span className="font-semibold text-slate-900">Seller:</span> {selectedItem.sellerName}
-              </p>
-              <p>
-                <span className="font-semibold text-slate-900">Contact:</span>{" "}
-                {selectedItem.sellerPhone || selectedItem.sellerEmail}
+                <span className="feed-meta text-slate-900">Condition:</span>{" "}
+                <span className="feed-post-copy">{selectedItem.condition}</span>
               </p>
             </div>
-            <p className="mt-3 text-sm text-slate-700">{selectedItem.description || "No description provided."}</p>
+            <p className="feed-post-copy mt-3 text-slate-700">{selectedItem.description || "No description provided."}</p>
 
-            {selectedItem.sellerUserId !== meQuery.data?.id ? (
-              <form
-                className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const text = messageToSeller.trim();
-                  if (!text) return;
-                  sendMessageMutation.mutate({
-                    recipientUserId: selectedItem.sellerUserId,
-                    body: text
-                  });
-                }}
-              >
-                <p className="mb-2 text-sm font-semibold text-slate-900">Message seller</p>
-                <textarea
-                  value={messageToSeller}
-                  onChange={(event) => setMessageToSeller(event.target.value)}
-                  rows={3}
-                  placeholder="Hi, is this item still available?"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-leaf-600 focus:ring-2"
-                />
-                <div className="mt-2 flex items-center justify-end gap-2">
-                  {sendMessageMutation.isError ? (
-                    <span className="text-xs text-red-600">{(sendMessageMutation.error as Error).message}</span>
-                  ) : null}
-                  <button
-                    type="submit"
-                    disabled={sendMessageMutation.isPending}
-                    className="rounded-lg bg-leaf-600 px-3 py-2 text-xs font-medium text-white hover:bg-leaf-700 disabled:opacity-70"
-                  >
-                    Send message
-                  </button>
-                </div>
-              </form>
-            ) : (
+            {selectedItem.sellerUserId === meQuery.data?.id ? (
               <p className="mt-4 text-xs text-slate-500">This is your listing.</p>
-            )}
+            ) : null}
           </div>
         </div>
       ) : null}

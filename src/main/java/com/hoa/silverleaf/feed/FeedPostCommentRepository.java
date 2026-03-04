@@ -9,6 +9,8 @@ import java.util.List;
 public interface FeedPostCommentRepository extends JpaRepository<FeedPostCommentEntity, Long> {
 
     List<FeedPostCommentEntity> findByPostIdInOrderByCreatedAtAscIdAsc(List<Long> postIds);
+    void deleteByIdAndPostId(Long id, Long postId);
+    void deleteByPostId(Long postId);
 
     @Query("""
             select c.post.id as postId, count(c) as totalCount

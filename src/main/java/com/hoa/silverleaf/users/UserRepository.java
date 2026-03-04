@@ -16,6 +16,7 @@ public interface UserRepository extends JpaRepository<UserEntity, Long> {
 
     Page<UserEntity> findByRole(UserRole role, Pageable pageable);
     Page<UserEntity> findByRoleIn(Collection<UserRole> roles, Pageable pageable);
+    Page<UserEntity> findByIdInAndRoleIn(Collection<Long> ids, Collection<UserRole> roles, Pageable pageable);
 
     @Query("""
             select u from UserEntity u
@@ -45,7 +46,24 @@ public interface UserRepository extends JpaRepository<UserEntity, Long> {
             Pageable pageable
     );
 
+    @Query("""
+            select u from UserEntity u
+            where u.id in :ids
+              and u.role in :roles
+              and (
+                lower(u.fullName) like lower(concat('%', :q, '%'))
+                or lower(u.email) like lower(concat('%', :q, '%'))
+              )
+            """)
+    Page<UserEntity> searchByIdInAndRoleInAndQuery(
+            @Param("ids") Collection<Long> ids,
+            @Param("roles") Collection<UserRole> roles,
+            @Param("q") String q,
+            Pageable pageable
+    );
+
     List<UserEntity> findByRoleAndEnabledTrueOrderByFullNameAsc(UserRole role);
 
     List<UserEntity> findByRoleInAndEnabledTrueOrderByFullNameAsc(Collection<UserRole> roles);
+    List<UserEntity> findByIdInAndRoleInAndEnabledTrueOrderByFullNameAsc(Collection<Long> ids, Collection<UserRole> roles);
 }

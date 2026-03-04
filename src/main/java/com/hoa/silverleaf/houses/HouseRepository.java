@@ -11,6 +11,7 @@ public interface HouseRepository extends JpaRepository<HouseEntity, Long> {
 
     List<HouseEntity> findByStatusOrderByAddressAsc(HouseStatus status);
     List<HouseEntity> findByStatusInOrderByAddressAsc(List<HouseStatus> statuses);
+    List<HouseEntity> findByCommunityIdOrderByAddressAsc(Long communityId);
 
     List<HouseEntity> findAllByOrderByAddressAsc();
 

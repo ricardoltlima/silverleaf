@@ -1,9 +1,11 @@
 package com.hoa.silverleaf.houses;
 
 import com.hoa.silverleaf.common.NotFoundException;
+import com.hoa.silverleaf.community.CommunityAccessService;
 import com.hoa.silverleaf.houses.dto.CreateHouseRequest;
 import com.hoa.silverleaf.houses.dto.HouseResponse;
 import com.hoa.silverleaf.houses.dto.HouseResidentResponse;
+import com.hoa.silverleaf.security.AppUserPrincipal;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,10 +20,28 @@ public class HouseService {
 
     private final HouseRepository houseRepository;
     private final HouseResidentRepository houseResidentRepository;
+    private final CommunityAccessService communityAccessService;
 
-    public HouseService(HouseRepository houseRepository, HouseResidentRepository houseResidentRepository) {
+    public HouseService(
+            HouseRepository houseRepository,
+            HouseResidentRepository houseResidentRepository,
+            CommunityAccessService communityAccessService
+    ) {
         this.houseRepository = houseRepository;
         this.houseResidentRepository = houseResidentRepository;
+        this.communityAccessService = communityAccessService;
+    }
+
+    @Transactional(readOnly = true)
+    public List<HouseResponse> listHouses(AppUserPrincipal principal) {
+        communityAccessService.requireCurrentCommunityAdmin(principal);
+        List<HouseResponse> houses = houseRepository.findByCommunityIdOrderByAddressAsc(
+                        communityAccessService.requireCommunityIdForPrincipal(principal)
+                ).stream()
+                .map(this::toResponse)
+                .toList();
+        log.debug("Listed all houses count={}", houses.size());
+        return houses;
     }
 
     @Transactional(readOnly = true)
@@ -29,7 +49,7 @@ public class HouseService {
         List<HouseResponse> houses = houseRepository.findAllByOrderByAddressAsc().stream()
                 .map(this::toResponse)
                 .toList();
-        log.debug("Listed all houses count={}", houses.size());
+        log.debug("Listed public house directory count={}", houses.size());
         return houses;
     }
 
@@ -46,7 +66,8 @@ public class HouseService {
     }
 
     @Transactional
-    public HouseResponse createHouse(CreateHouseRequest request) {
+    public HouseResponse createHouse(AppUserPrincipal principal, CreateHouseRequest request) {
+        communityAccessService.requireCurrentCommunityAdmin(principal);
         String normalizedAddress = request.address().trim();
         if (houseRepository.existsByAddressIgnoreCase(normalizedAddress)) {
             log.warn("House create rejected because address already exists address={}", normalizedAddress);
@@ -54,6 +75,7 @@ public class HouseService {
         }
 
         HouseEntity house = new HouseEntity();
+        house.setCommunity(communityAccessService.requireCommunityForPrincipal(principal));
         house.setAddress(normalizedAddress);
         house.setQrToken(generateUniqueQrToken());
         house.setStatus(HouseStatus.UNKNOWN);

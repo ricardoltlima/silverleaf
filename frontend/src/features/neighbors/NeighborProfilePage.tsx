@@ -100,10 +100,6 @@ export function NeighborProfilePage() {
               <p className="text-sm font-semibold text-slate-900">{profile.serviceHours || "Not provided"}</p>
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs text-slate-500">Service area</p>
-              <p className="text-sm font-semibold text-slate-900">{profile.serviceArea || "Not provided"}</p>
-            </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
               <p className="text-xs text-slate-500">Business page</p>
               {profile.serviceBusinessUrl ? (
                 <a

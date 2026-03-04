@@ -1,5 +1,6 @@
 package com.hoa.silverleaf.groups;
 
+import com.hoa.silverleaf.community.CommunityEntity;
 import com.hoa.silverleaf.users.UserEntity;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -14,6 +15,10 @@ public class ResidentGroupEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "community_id", nullable = false)
+    private CommunityEntity community;
 
     @Column(nullable = false, unique = true, length = 120)
     private String slug;
@@ -46,6 +51,14 @@ public class ResidentGroupEntity {
 
     public String getSlug() {
         return slug;
+    }
+
+    public CommunityEntity getCommunity() {
+        return community;
+    }
+
+    public void setCommunity(CommunityEntity community) {
+        this.community = community;
     }
 
     public void setSlug(String slug) {

@@ -124,6 +124,10 @@ export function GroupsPage() {
   }, [ownedRequests]);
 
   const requestedGroupSlug = searchParams.get("group");
+  const requestedPostId = Number(searchParams.get("postId"));
+  const requestedCommentId = Number(searchParams.get("commentId"));
+  const focusedPostId = Number.isFinite(requestedPostId) ? requestedPostId : null;
+  const focusedCommentId = Number.isFinite(requestedCommentId) ? requestedCommentId : null;
   const initialExpanded =
     requestedGroupSlug && subscribedGroups.some((group) => group.slug === requestedGroupSlug)
       ? requestedGroupSlug
@@ -133,6 +137,28 @@ export function GroupsPage() {
   useEffect(() => {
     setAllGroupsOpen(shouldOpenAllGroups);
   }, [shouldOpenAllGroups]);
+
+  useEffect(() => {
+    if (!requestedGroupSlug) {
+      return;
+    }
+    if (subscribedGroups.some((group) => group.slug === requestedGroupSlug)) {
+      setExpandedGroupSlug(requestedGroupSlug);
+      return;
+    }
+    if ((groupsQuery.data ?? []).some((group) => group.slug === requestedGroupSlug)) {
+      setAllGroupsOpen(true);
+    }
+  }, [groupsQuery.data, requestedGroupSlug, subscribedGroups]);
+
+  useEffect(() => {
+    if (!expandedGroupSlug) {
+      return;
+    }
+    if (!subscribedGroups.some((group) => group.slug === expandedGroupSlug)) {
+      setExpandedGroupSlug(null);
+    }
+  }, [expandedGroupSlug, subscribedGroups]);
 
   const onCreateGroup = (event: FormEvent) => {
     event.preventDefault();
@@ -225,6 +251,8 @@ export function GroupsPage() {
                     channel="GROUP"
                     groupSlug={group.slug}
                     composerPlaceholder={`Share something with ${group.name}...`}
+                    focusedPostId={expanded && requestedGroupSlug === group.slug ? focusedPostId : null}
+                    focusedCommentId={expanded && requestedGroupSlug === group.slug ? focusedCommentId : null}
                   />
                 </div>
               ) : null}

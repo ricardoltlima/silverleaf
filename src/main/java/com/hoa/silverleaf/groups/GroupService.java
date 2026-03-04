@@ -1,6 +1,7 @@
 package com.hoa.silverleaf.groups;
 
 import com.hoa.silverleaf.common.NotFoundException;
+import com.hoa.silverleaf.community.CommunityAccessService;
 import com.hoa.silverleaf.groups.dto.CreateGroupRequest;
 import com.hoa.silverleaf.groups.dto.GroupJoinRequestResponse;
 import com.hoa.silverleaf.groups.dto.GroupResponse;
@@ -29,24 +30,28 @@ public class GroupService {
     private final ResidentGroupMemberRepository residentGroupMemberRepository;
     private final ResidentGroupJoinRequestRepository residentGroupJoinRequestRepository;
     private final UserRepository userRepository;
+    private final CommunityAccessService communityAccessService;
 
     public GroupService(
             ResidentGroupRepository residentGroupRepository,
             ResidentGroupMemberRepository residentGroupMemberRepository,
             ResidentGroupJoinRequestRepository residentGroupJoinRequestRepository,
-            UserRepository userRepository
+            UserRepository userRepository,
+            CommunityAccessService communityAccessService
     ) {
         this.residentGroupRepository = residentGroupRepository;
         this.residentGroupMemberRepository = residentGroupMemberRepository;
         this.residentGroupJoinRequestRepository = residentGroupJoinRequestRepository;
         this.userRepository = userRepository;
+        this.communityAccessService = communityAccessService;
     }
 
     @Transactional(readOnly = true)
     public List<GroupResponse> listGroupsForUser(AppUserPrincipal principal) {
         Long userId = principal.getId();
-        List<ResidentGroupEntity> allGroups = residentGroupRepository.findAllByOrderByNameAsc();
-        List<Long> memberGroupIds = residentGroupMemberRepository.findGroupIdsByUserId(userId);
+        Long communityId = communityAccessService.requireCommunityIdForPrincipal(principal);
+        List<ResidentGroupEntity> allGroups = residentGroupRepository.findAllByCommunityIdOrderByNameAsc(communityId);
+        List<Long> memberGroupIds = residentGroupMemberRepository.findGroupIdsByUserIdAndCommunityId(userId, communityId);
         List<Long> allGroupIds = allGroups.stream().map(ResidentGroupEntity::getId).toList();
         Map<Long, Long> memberCountByGroupId = new HashMap<>();
         if (!allGroupIds.isEmpty()) {
@@ -88,9 +93,10 @@ public class GroupService {
                 .orElseThrow(() -> new NotFoundException("User not found"));
 
         ResidentGroupEntity group = new ResidentGroupEntity();
+        group.setCommunity(communityAccessService.requireCommunityForPrincipal(principal));
         group.setName(request.name().trim());
         group.setDescription(trimToNull(request.description()));
-        group.setVisibility(parseVisibility(request.visibility()));
+        group.setVisibility(request.visibility());
         group.setSlug(generateUniqueSlug(request.name()));
         group.setOwner(owner);
         ResidentGroupEntity saved = residentGroupRepository.save(group);
@@ -121,7 +127,8 @@ public class GroupService {
 
     @Transactional
     public GroupResponse subscribe(AppUserPrincipal principal, Long groupId) {
-        ResidentGroupEntity group = residentGroupRepository.findById(groupId)
+        Long communityId = communityAccessService.requireCommunityIdForPrincipal(principal);
+        ResidentGroupEntity group = residentGroupRepository.findByIdAndCommunityId(groupId, communityId)
                 .orElseThrow(() -> new NotFoundException("Group not found"));
         UserEntity user = userRepository.findById(principal.getId())
                 .orElseThrow(() -> new NotFoundException("User not found"));
@@ -166,7 +173,8 @@ public class GroupService {
 
     @Transactional
     public GroupResponse unsubscribe(AppUserPrincipal principal, Long groupId) {
-        ResidentGroupEntity group = residentGroupRepository.findById(groupId)
+        Long communityId = communityAccessService.requireCommunityIdForPrincipal(principal);
+        ResidentGroupEntity group = residentGroupRepository.findByIdAndCommunityId(groupId, communityId)
                 .orElseThrow(() -> new NotFoundException("Group not found"));
         if (group.getOwner().getId().equals(principal.getId())) {
             throw new IllegalArgumentException("Group owner cannot unsubscribe from own group");
@@ -182,8 +190,10 @@ public class GroupService {
 
     @Transactional(readOnly = true)
     public List<GroupJoinRequestResponse> listPendingRequests(AppUserPrincipal principal) {
-        return residentGroupJoinRequestRepository.findByGroupOwnerIdAndStatusOrderByCreatedAtAsc(
+        Long communityId = communityAccessService.requireCommunityIdForPrincipal(principal);
+        return residentGroupJoinRequestRepository.findByGroupOwnerIdAndGroupCommunityIdAndStatusOrderByCreatedAtAsc(
                         principal.getId(),
+                        communityId,
                         JoinRequestStatus.PENDING
                 ).stream()
                 .map(request -> new GroupJoinRequestResponse(
@@ -240,12 +250,13 @@ public class GroupService {
 
     @Transactional(readOnly = true)
     public List<String> findAccessibleGroupSlugs(Long userId) {
+        Long communityId = communityAccessService.requireCommunityIdForUser(userId);
         List<String> slugs = new ArrayList<>();
-        residentGroupRepository.findByVisibilityOrderByNameAsc(GroupVisibility.PUBLIC)
+        residentGroupRepository.findByCommunityIdAndVisibilityOrderByNameAsc(communityId, GroupVisibility.PUBLIC)
                 .forEach(group -> slugs.add(group.getSlug()));
-        List<Long> memberGroupIds = residentGroupMemberRepository.findGroupIdsByUserId(userId);
+        List<Long> memberGroupIds = residentGroupMemberRepository.findGroupIdsByUserIdAndCommunityId(userId, communityId);
         if (!memberGroupIds.isEmpty()) {
-            residentGroupRepository.findByIdInOrderByNameAsc(memberGroupIds).forEach(group -> {
+            residentGroupRepository.findByCommunityIdAndIdInOrderByNameAsc(communityId, memberGroupIds).forEach(group -> {
                 if (!slugs.contains(group.getSlug())) {
                     slugs.add(group.getSlug());
                 }
@@ -256,7 +267,10 @@ public class GroupService {
 
     @Transactional(readOnly = true)
     public ResidentGroupEntity requireAccessibleGroup(Long userId, String groupSlug) {
-        ResidentGroupEntity group = residentGroupRepository.findBySlug(groupSlug)
+        ResidentGroupEntity group = residentGroupRepository.findBySlugAndCommunityId(
+                        groupSlug,
+                        communityAccessService.requireCommunityIdForUser(userId)
+                )
                 .orElseThrow(() -> new NotFoundException("Group not found"));
         if (group.getVisibility() == GroupVisibility.PUBLIC) {
             return group;
@@ -303,14 +317,6 @@ public class GroupService {
             throw new IllegalArgumentException("Only the group owner can review requests");
         }
         return request;
-    }
-
-    private GroupVisibility parseVisibility(String rawVisibility) {
-        try {
-            return GroupVisibility.valueOf(rawVisibility.trim().toUpperCase(Locale.ROOT));
-        } catch (Exception ex) {
-            throw new IllegalArgumentException("Invalid group visibility");
-        }
     }
 
     private String generateUniqueSlug(String groupName) {

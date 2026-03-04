@@ -42,12 +42,12 @@ public class BoardController {
     }
 
     @GetMapping("/news")
-    public List<NewsResponse> listNews() {
-        return boardService.listNews();
+    public List<NewsResponse> listNews(@AuthenticationPrincipal AppUserPrincipal principal) {
+        return boardService.listNews(principal);
     }
 
     @PostMapping("/board/news")
-    @PreAuthorize("hasAnyRole('HOA_ADMIN', 'ADMIN')")
+    @PreAuthorize("@communityAccessService.isCurrentCommunityAdmin(authentication.principal)")
     @ResponseStatus(HttpStatus.CREATED)
     public NewsResponse createNews(
             @AuthenticationPrincipal AppUserPrincipal principal,
@@ -58,30 +58,31 @@ public class BoardController {
     }
 
     @PutMapping("/board/news/{newsId}")
-    @PreAuthorize("hasAnyRole('HOA_ADMIN', 'ADMIN')")
+    @PreAuthorize("@communityAccessService.isCurrentCommunityAdmin(authentication.principal)")
     public NewsResponse updateNews(
+            @AuthenticationPrincipal AppUserPrincipal principal,
             @PathVariable Long newsId,
             @Valid @RequestBody UpdateNewsRequest request
     ) {
         log.info("Board news update requested newsId={}", newsId);
-        return boardService.updateNews(newsId, request);
+        return boardService.updateNews(principal, newsId, request);
     }
 
     @DeleteMapping("/board/news/{newsId}")
-    @PreAuthorize("hasAnyRole('HOA_ADMIN', 'ADMIN')")
+    @PreAuthorize("@communityAccessService.isCurrentCommunityAdmin(authentication.principal)")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteNews(@PathVariable Long newsId) {
+    public void deleteNews(@AuthenticationPrincipal AppUserPrincipal principal, @PathVariable Long newsId) {
         log.info("Board news delete requested newsId={}", newsId);
-        boardService.deleteNews(newsId);
+        boardService.deleteNews(principal, newsId);
     }
 
     @GetMapping("/broadcasts")
-    public List<BroadcastResponse> listBroadcasts() {
-        return boardService.listBroadcasts();
+    public List<BroadcastResponse> listBroadcasts(@AuthenticationPrincipal AppUserPrincipal principal) {
+        return boardService.listBroadcasts(principal);
     }
 
     @PostMapping("/board/broadcasts")
-    @PreAuthorize("hasAnyRole('HOA_ADMIN', 'ADMIN')")
+    @PreAuthorize("@communityAccessService.isCurrentCommunityAdmin(authentication.principal)")
     @ResponseStatus(HttpStatus.CREATED)
     public BroadcastResponse createBroadcast(
             @AuthenticationPrincipal AppUserPrincipal principal,
@@ -97,7 +98,7 @@ public class BoardController {
     }
 
     @PostMapping("/board/polls")
-    @PreAuthorize("hasAnyRole('HOA_ADMIN', 'ADMIN')")
+    @PreAuthorize("@communityAccessService.isCurrentCommunityAdmin(authentication.principal)")
     @ResponseStatus(HttpStatus.CREATED)
     public PollResponse createPoll(
             @AuthenticationPrincipal AppUserPrincipal principal,
@@ -133,18 +134,19 @@ public class BoardController {
     }
 
     @GetMapping("/board/violations")
-    @PreAuthorize("hasAnyRole('HOA_ADMIN', 'ADMIN')")
-    public List<ViolationResponse> listAllViolations() {
-        return boardService.listAllViolations();
+    @PreAuthorize("@communityAccessService.isCurrentCommunityAdmin(authentication.principal)")
+    public List<ViolationResponse> listAllViolations(@AuthenticationPrincipal AppUserPrincipal principal) {
+        return boardService.listAllViolations(principal);
     }
 
     @PatchMapping("/board/violations/{violationId}/status")
-    @PreAuthorize("hasAnyRole('HOA_ADMIN', 'ADMIN')")
+    @PreAuthorize("@communityAccessService.isCurrentCommunityAdmin(authentication.principal)")
     public ViolationResponse updateViolationStatus(
+            @AuthenticationPrincipal AppUserPrincipal principal,
             @PathVariable Long violationId,
             @Valid @RequestBody UpdateViolationStatusRequest request
     ) {
         log.info("Violation status update requested violationId={} status={}", violationId, request.status());
-        return boardService.updateViolationStatus(violationId, request);
+        return boardService.updateViolationStatus(principal, violationId, request);
     }
 }

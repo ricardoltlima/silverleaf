@@ -6,9 +6,10 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ResidentGroupRepository extends JpaRepository<ResidentGroupEntity, Long> {
-    Optional<ResidentGroupEntity> findBySlug(String slug);
+    Optional<ResidentGroupEntity> findBySlugAndCommunityId(String slug, Long communityId);
+    Optional<ResidentGroupEntity> findByIdAndCommunityId(Long id, Long communityId);
     boolean existsBySlug(String slug);
-    List<ResidentGroupEntity> findAllByOrderByNameAsc();
-    List<ResidentGroupEntity> findByVisibilityOrderByNameAsc(GroupVisibility visibility);
-    List<ResidentGroupEntity> findByIdInOrderByNameAsc(List<Long> ids);
+    List<ResidentGroupEntity> findAllByCommunityIdOrderByNameAsc(Long communityId);
+    List<ResidentGroupEntity> findByCommunityIdAndVisibilityOrderByNameAsc(Long communityId, GroupVisibility visibility);
+    List<ResidentGroupEntity> findByCommunityIdAndIdInOrderByNameAsc(Long communityId, List<Long> ids);
 }

@@ -1,7 +1,11 @@
 package com.hoa.silverleaf.board;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hoa.silverleaf.board.dto.*;
 import com.hoa.silverleaf.common.NotFoundException;
+import com.hoa.silverleaf.community.CommunityAccessService;
 import com.hoa.silverleaf.security.AppUserPrincipal;
 import com.hoa.silverleaf.users.UserEntity;
 import com.hoa.silverleaf.users.UserRepository;
@@ -22,6 +26,8 @@ public class BoardService {
     private final PollVoteRepository pollVoteRepository;
     private final ViolationReportRepository violationReportRepository;
     private final UserRepository userRepository;
+    private final CommunityAccessService communityAccessService;
+    private final ObjectMapper objectMapper;
 
     public BoardService(
             NewsRepository newsRepository,
@@ -29,7 +35,9 @@ public class BoardService {
             PollRepository pollRepository,
             PollVoteRepository pollVoteRepository,
             ViolationReportRepository violationReportRepository,
-            UserRepository userRepository
+            UserRepository userRepository,
+            CommunityAccessService communityAccessService,
+            ObjectMapper objectMapper
     ) {
         this.newsRepository = newsRepository;
         this.broadcastRepository = broadcastRepository;
@@ -37,19 +45,25 @@ public class BoardService {
         this.pollVoteRepository = pollVoteRepository;
         this.violationReportRepository = violationReportRepository;
         this.userRepository = userRepository;
+        this.communityAccessService = communityAccessService;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional(readOnly = true)
-    public List<NewsResponse> listNews() {
-        return newsRepository.findAllByOrderByCreatedAtDescIdDesc().stream()
+    public List<NewsResponse> listNews(AppUserPrincipal principal) {
+        return newsRepository.findAllByCommunityIdOrderByCreatedAtDescIdDesc(
+                        communityAccessService.requireCommunityIdForPrincipal(principal)
+                ).stream()
                 .map(this::toNewsResponse)
                 .toList();
     }
 
     @Transactional
     public NewsResponse createNews(AppUserPrincipal principal, CreateNewsRequest request) {
+        communityAccessService.requireCurrentCommunityAdmin(principal);
         UserEntity author = requireUser(principal.getId());
         NewsEntity entity = new NewsEntity();
+        entity.setCommunity(communityAccessService.requireCommunityForPrincipal(principal));
         entity.setTitle(request.title().trim());
         entity.setBodyText(request.body().trim());
         entity.setMediaUrlsText(serializeUrls(request.mediaUrls()));
@@ -59,8 +73,13 @@ public class BoardService {
     }
 
     @Transactional
-    public NewsResponse updateNews(Long newsId, UpdateNewsRequest request) {
-        NewsEntity news = newsRepository.findById(newsId).orElseThrow(() -> new NotFoundException("News not found"));
+    public NewsResponse updateNews(AppUserPrincipal principal, Long newsId, UpdateNewsRequest request) {
+        communityAccessService.requireCurrentCommunityAdmin(principal);
+        NewsEntity news = newsRepository.findByIdAndCommunityId(
+                        newsId,
+                        communityAccessService.requireCommunityIdForPrincipal(principal)
+                )
+                .orElseThrow(() -> new NotFoundException("News not found"));
         news.setTitle(request.title().trim());
         news.setBodyText(request.body().trim());
         news.setMediaUrlsText(serializeUrls(request.mediaUrls()));
@@ -69,22 +88,31 @@ public class BoardService {
     }
 
     @Transactional
-    public void deleteNews(Long newsId) {
-        NewsEntity news = newsRepository.findById(newsId).orElseThrow(() -> new NotFoundException("News not found"));
+    public void deleteNews(AppUserPrincipal principal, Long newsId) {
+        communityAccessService.requireCurrentCommunityAdmin(principal);
+        NewsEntity news = newsRepository.findByIdAndCommunityId(
+                        newsId,
+                        communityAccessService.requireCommunityIdForPrincipal(principal)
+                )
+                .orElseThrow(() -> new NotFoundException("News not found"));
         newsRepository.delete(news);
     }
 
     @Transactional(readOnly = true)
-    public List<BroadcastResponse> listBroadcasts() {
-        return broadcastRepository.findAllByOrderByCreatedAtDescIdDesc().stream()
+    public List<BroadcastResponse> listBroadcasts(AppUserPrincipal principal) {
+        return broadcastRepository.findAllByCommunityIdOrderByCreatedAtDescIdDesc(
+                        communityAccessService.requireCommunityIdForPrincipal(principal)
+                ).stream()
                 .map(b -> new BroadcastResponse(b.getId(), b.getTitle(), b.getBodyText(), b.getAuthor().getFullName(), b.getCreatedAt()))
                 .toList();
     }
 
     @Transactional
     public BroadcastResponse createBroadcast(AppUserPrincipal principal, CreateBroadcastRequest request) {
+        communityAccessService.requireCurrentCommunityAdmin(principal);
         UserEntity author = requireUser(principal.getId());
         BroadcastEntity entity = new BroadcastEntity();
+        entity.setCommunity(communityAccessService.requireCommunityForPrincipal(principal));
         entity.setTitle(request.title().trim());
         entity.setBodyText(request.body().trim());
         entity.setAuthor(author);
@@ -94,11 +122,13 @@ public class BoardService {
 
     @Transactional
     public PollResponse createPoll(AppUserPrincipal principal, CreatePollRequest request) {
+        communityAccessService.requireCurrentCommunityAdmin(principal);
         if (request.options() == null || request.options().size() < 2) {
             throw new IllegalArgumentException("Poll needs at least 2 options");
         }
         UserEntity author = requireUser(principal.getId());
         PollEntity poll = new PollEntity();
+        poll.setCommunity(communityAccessService.requireCommunityForPrincipal(principal));
         poll.setQuestion(request.question().trim());
         poll.setOptionsText(serializeOptions(request.options()));
         poll.setActive(true);
@@ -109,7 +139,9 @@ public class BoardService {
 
     @Transactional(readOnly = true)
     public List<PollResponse> listActivePolls(AppUserPrincipal principal) {
-        List<PollEntity> polls = pollRepository.findByActiveTrueOrderByCreatedAtDescIdDesc();
+        List<PollEntity> polls = pollRepository.findByCommunityIdAndActiveTrueOrderByCreatedAtDescIdDesc(
+                communityAccessService.requireCommunityIdForPrincipal(principal)
+        );
         List<Long> pollIds = polls.stream().map(PollEntity::getId).toList();
         Map<Long, List<PollVoteEntity>> votesByPollId = new HashMap<>();
         if (!pollIds.isEmpty()) {
@@ -124,7 +156,11 @@ public class BoardService {
 
     @Transactional
     public PollResponse vote(AppUserPrincipal principal, Long pollId, VotePollRequest request) {
-        PollEntity poll = pollRepository.findById(pollId).orElseThrow(() -> new NotFoundException("Poll not found"));
+        PollEntity poll = pollRepository.findByIdAndCommunityId(
+                        pollId,
+                        communityAccessService.requireCommunityIdForPrincipal(principal)
+                )
+                .orElseThrow(() -> new NotFoundException("Poll not found"));
         if (!poll.isActive()) throw new IllegalArgumentException("Poll is closed");
         List<String> options = deserializeOptions(poll.getOptionsText());
         if (request.optionIndex() < 0 || request.optionIndex() >= options.size()) {
@@ -150,6 +186,7 @@ public class BoardService {
     public ViolationResponse createViolation(AppUserPrincipal principal, CreateViolationRequest request) {
         UserEntity reporter = requireUser(principal.getId());
         ViolationReportEntity entity = new ViolationReportEntity();
+        entity.setCommunity(communityAccessService.requireCommunityForPrincipal(principal));
         entity.setReporter(reporter);
         entity.setDescription(request.description().trim());
         List<String> mediaUrls = deserializeUrls(serializeUrls(request.mediaUrls()));
@@ -162,21 +199,31 @@ public class BoardService {
 
     @Transactional(readOnly = true)
     public List<ViolationResponse> listMyViolations(AppUserPrincipal principal) {
-        return violationReportRepository.findByReporterIdOrderByCreatedAtDescIdDesc(principal.getId()).stream()
+        return violationReportRepository.findByCommunityIdAndReporterIdOrderByCreatedAtDescIdDesc(
+                        communityAccessService.requireCommunityIdForPrincipal(principal),
+                        principal.getId()
+                ).stream()
                 .map(this::toViolationResponse)
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public List<ViolationResponse> listAllViolations() {
-        return violationReportRepository.findAllByOrderByCreatedAtDescIdDesc().stream()
+    public List<ViolationResponse> listAllViolations(AppUserPrincipal principal) {
+        communityAccessService.requireCurrentCommunityAdmin(principal);
+        return violationReportRepository.findAllByCommunityIdOrderByCreatedAtDescIdDesc(
+                        communityAccessService.requireCommunityIdForPrincipal(principal)
+                ).stream()
                 .map(this::toViolationResponse)
                 .toList();
     }
 
     @Transactional
-    public ViolationResponse updateViolationStatus(Long id, UpdateViolationStatusRequest request) {
-        ViolationReportEntity entity = violationReportRepository.findById(id)
+    public ViolationResponse updateViolationStatus(AppUserPrincipal principal, Long id, UpdateViolationStatusRequest request) {
+        communityAccessService.requireCurrentCommunityAdmin(principal);
+        ViolationReportEntity entity = violationReportRepository.findByIdAndCommunityId(
+                        id,
+                        communityAccessService.requireCommunityIdForPrincipal(principal)
+                )
                 .orElseThrow(() -> new NotFoundException("Violation not found"));
         entity.setStatus(parseViolationStatus(request.status()));
         ViolationReportEntity saved = violationReportRepository.save(entity);
@@ -229,27 +276,31 @@ public class BoardService {
     }
 
     private String serializeOptions(List<String> options) {
-        return options.stream().map(String::trim).filter(value -> !value.isEmpty()).reduce((a, b) -> a + "||" + b)
-                .orElseThrow(() -> new IllegalArgumentException("Poll options required"));
+        List<String> normalized = options.stream()
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .toList();
+        if (normalized.isEmpty()) {
+            throw new IllegalArgumentException("Poll options required");
+        }
+        return writeJsonArray(normalized);
     }
 
     private List<String> deserializeOptions(String raw) {
-        if (raw == null || raw.isBlank()) return List.of();
-        return Arrays.stream(raw.split("\\|\\|")).map(String::trim).filter(v -> !v.isEmpty()).toList();
+        return readJsonArray(raw);
     }
 
     private String serializeUrls(List<String> urls) {
         if (urls == null || urls.isEmpty()) return null;
-        return urls.stream()
+        List<String> normalized = urls.stream()
                 .map(String::trim)
                 .filter(value -> !value.isEmpty())
-                .reduce((a, b) -> a + "||" + b)
-                .orElse(null);
+                .toList();
+        return normalized.isEmpty() ? null : writeJsonArray(normalized);
     }
 
     private List<String> deserializeUrls(String raw) {
-        if (raw == null || raw.isBlank()) return List.of();
-        return Arrays.stream(raw.split("\\|\\|")).map(String::trim).filter(v -> !v.isEmpty()).toList();
+        return readJsonArray(raw);
     }
 
     private ViolationStatus parseViolationStatus(String raw) {
@@ -264,5 +315,28 @@ public class BoardService {
         if (value == null) return null;
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String writeJsonArray(List<String> values) {
+        try {
+            return objectMapper.writeValueAsString(values);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalArgumentException("Unable to serialize board data", ex);
+        }
+    }
+
+    private List<String> readJsonArray(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(raw, new TypeReference<List<String>>() {});
+        } catch (JsonProcessingException ex) {
+            // Backward compatibility for rows that were not migrated yet.
+            return Arrays.stream(raw.split("\\|\\|"))
+                    .map(String::trim)
+                    .filter(value -> !value.isEmpty())
+                    .toList();
+        }
     }
 }

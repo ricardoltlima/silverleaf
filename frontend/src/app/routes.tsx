@@ -17,6 +17,7 @@ import { NeighborProfilePage } from "@/features/neighbors/NeighborProfilePage";
 import { BoardNewsPage } from "@/features/board/BoardNewsPage";
 import { BoardBroadcastsPage } from "@/features/board/BoardBroadcastsPage";
 import { BoardPollsPage } from "@/features/board/BoardPollsPage";
+import { BoardReportsPage } from "@/features/board/BoardReportsPage";
 import { HoaWorkspacePage } from "@/features/hoa/HoaWorkspacePage";
 import { SystemAdminPage } from "@/features/admin/SystemAdminPage";
 import { getAccessToken } from "@/lib/authStorage";
@@ -58,6 +59,7 @@ export function AppRoutes() {
         <Route path="board/news" element={<BoardNewsPage />} />
         <Route path="board/broadcasts" element={<BoardBroadcastsPage />} />
         <Route path="board/polls" element={<BoardPollsPage />} />
+        <Route path="board/reports" element={<BoardReportsPage />} />
         <Route path="hoa/workspace" element={<HoaWorkspacePage />} />
         <Route path="system-admin" element={<SystemAdminPage />} />
       </Route>

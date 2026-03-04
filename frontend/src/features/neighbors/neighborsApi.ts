@@ -22,8 +22,6 @@ export type NeighborProfile = {
   serviceContactEmail: string | null;
   serviceBusinessUrl: string | null;
   serviceHours: string | null;
-  serviceArea: string | null;
-  serviceVisibility: "PUBLIC" | "GROUPS";
 };
 
 export function fetchNeighbors() {

@@ -11,6 +11,7 @@ public record CreateResidentInviteRequest(
         @Email @NotBlank @Size(max = 320) String email,
         @NotBlank @Size(min = 8, max = 72) String password,
         @NotNull Long houseId,
-        UserRole role
+        UserRole role,
+        Boolean communityAdmin
 ) {
 }

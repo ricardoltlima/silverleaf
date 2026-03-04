@@ -1,5 +1,6 @@
 package com.hoa.silverleaf.auth;
 
+import com.hoa.silverleaf.community.CommunityEntity;
 import com.hoa.silverleaf.users.UserEntity;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -20,6 +21,10 @@ public class RefreshTokenEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private UserEntity user;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "active_community_id", nullable = false)
+    private CommunityEntity activeCommunity;
 
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
@@ -49,6 +54,14 @@ public class RefreshTokenEntity {
 
     public void setUser(UserEntity user) {
         this.user = user;
+    }
+
+    public CommunityEntity getActiveCommunity() {
+        return activeCommunity;
+    }
+
+    public void setActiveCommunity(CommunityEntity activeCommunity) {
+        this.activeCommunity = activeCommunity;
     }
 
     public Instant getExpiresAt() {

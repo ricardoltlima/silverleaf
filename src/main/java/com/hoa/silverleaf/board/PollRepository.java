@@ -5,5 +5,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
 public interface PollRepository extends JpaRepository<PollEntity, Long> {
-    List<PollEntity> findByActiveTrueOrderByCreatedAtDescIdDesc();
+    List<PollEntity> findByCommunityIdAndActiveTrueOrderByCreatedAtDescIdDesc(Long communityId);
+    java.util.Optional<PollEntity> findByIdAndCommunityId(Long id, Long communityId);
 }

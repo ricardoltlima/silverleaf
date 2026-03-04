@@ -11,13 +11,14 @@ import {
   type ResidentDirectoryItem
 } from "@/features/hoa/hoaApi";
 import { fetchCurrentUser } from "@/features/users/currentUserApi";
-import { isHoaManager, isSystemAdmin, roleLabel, type UserRole } from "@/features/users/roleUtils";
+import { canManageCommunity, isSystemAdmin, roleLabel, type UserRole } from "@/features/users/roleUtils";
 
 type EditableResident = {
   fullName: string;
   email: string;
   role: UserRole;
   password: string;
+  communityAdmin: boolean;
 };
 
 const roleOptions: UserRole[] = ["RESIDENT", "TENANT", "HOA_ADMIN", "ADMIN"];
@@ -31,13 +32,14 @@ export function HoaWorkspacePage() {
     email: "",
     password: "myPassw0rd!",
     houseId: 0,
-    role: "RESIDENT" as Exclude<UserRole, "ADMIN">
+    role: "RESIDENT" as Exclude<UserRole, "ADMIN">,
+    communityAdmin: false
   });
   const [inviteUrl, setInviteUrl] = useState("");
   const [editingResidentId, setEditingResidentId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<EditableResident | null>(null);
 
-  const canManageHoa = isHoaManager(meQuery.data?.role);
+  const canManageHoa = canManageCommunity(meQuery.data);
   const canAssignSystemAdmin = isSystemAdmin(meQuery.data?.role);
 
   const residentsQuery = useQuery({
@@ -55,7 +57,7 @@ export function HoaWorkspacePage() {
     mutationFn: createResidentInvitation,
     onSuccess: (result) => {
       setInviteUrl(result.invitationUrl);
-      setInviteForm((current) => ({ ...current, fullName: "", email: "", password: "myPassw0rd!" }));
+      setInviteForm((current) => ({ ...current, fullName: "", email: "", password: "myPassw0rd!", communityAdmin: false }));
       queryClient.invalidateQueries({ queryKey: ["hoa", "residents"] });
     }
   });
@@ -66,7 +68,8 @@ export function HoaWorkspacePage() {
         fullName: payload.fullName,
         email: payload.email,
         password: payload.password.trim() ? payload.password : null,
-        role: payload.role
+        role: payload.role,
+        communityAdmin: payload.communityAdmin
       }),
     onSuccess: () => {
       setEditingResidentId(null);
@@ -98,7 +101,8 @@ export function HoaWorkspacePage() {
       email: inviteForm.email.trim(),
       password: inviteForm.password,
       houseId: inviteForm.houseId,
-      role: inviteForm.role
+      role: inviteForm.role,
+      communityAdmin: inviteForm.communityAdmin
     });
   };
 
@@ -108,12 +112,13 @@ export function HoaWorkspacePage() {
       fullName: resident.fullName,
       email: resident.email,
       role: resident.role,
-      password: ""
+      password: "",
+      communityAdmin: resident.communityAdmin
     });
   };
 
   if (!canManageHoa) {
-    return <section className="card p-4 text-sm text-rose-700">Only HOA managers can access this workspace.</section>;
+    return <section className="card p-4 text-sm text-rose-700">Only community admins can access this workspace.</section>;
   }
 
   return (
@@ -124,7 +129,7 @@ export function HoaWorkspacePage() {
         </div>
         <h2 className="text-xl font-semibold text-slate-900">HOA Operations</h2>
         <p className="mt-1 text-sm text-slate-600">
-          Invite new community members, assign resident or tenant status, and keep HOA operations in one place.
+          Invite new community members, assign community admin access, and keep local HOA operations in one place.
         </p>
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
           <Link to="/board/news" className="rounded-full border border-slate-300 bg-white px-3 py-2 font-medium text-slate-700 hover:bg-slate-100">
@@ -176,8 +181,16 @@ export function HoaWorkspacePage() {
             >
               <option value="RESIDENT">Resident</option>
               <option value="TENANT">Tenant</option>
-              {canAssignSystemAdmin ? <option value="HOA_ADMIN">HOA Admin</option> : null}
+              {canAssignSystemAdmin ? <option value="HOA_ADMIN">Global HOA Admin</option> : null}
             </select>
+            <label className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={inviteForm.communityAdmin}
+                onChange={(event) => setInviteForm((current) => ({ ...current, communityAdmin: event.target.checked }))}
+              />
+              Community admin access
+            </label>
             <select
               value={inviteForm.houseId || ""}
               onChange={(event) => setInviteForm((current) => ({ ...current, houseId: Number(event.target.value) }))}
@@ -221,7 +234,7 @@ export function HoaWorkspacePage() {
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="text-base font-semibold text-slate-900">Community members</h3>
-            <p className="text-sm text-slate-600">Residents, tenants, and HOA admins that belong to this community.</p>
+            <p className="text-sm text-slate-600">Residents and tenants in this community, plus any explicit community admins.</p>
           </div>
           <input
             value={search}
@@ -268,6 +281,16 @@ export function HoaWorkspacePage() {
                       placeholder="New password (optional)"
                       className="md:col-span-2 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-leaf-600 focus:ring-2"
                     />
+                    <label className="md:col-span-2 flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={editForm.communityAdmin}
+                        onChange={(event) =>
+                          setEditForm((current) => (current ? { ...current, communityAdmin: event.target.checked } : current))
+                        }
+                      />
+                      Community admin access
+                    </label>
                     <div className="flex gap-2">
                       <button
                         type="button"
@@ -299,6 +322,11 @@ export function HoaWorkspacePage() {
                       <span className="rounded-full bg-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-700">
                         {roleLabel(resident.role)}
                       </span>
+                      {resident.communityAdmin ? (
+                        <span className="rounded-full bg-indigo-100 px-2 py-1 text-[11px] font-semibold text-indigo-700">
+                          Community Admin
+                        </span>
+                      ) : null}
                       <span
                         className={`rounded-full px-2 py-1 text-[11px] font-semibold ${
                           resident.enabled ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"

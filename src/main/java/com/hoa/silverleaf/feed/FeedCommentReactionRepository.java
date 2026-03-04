@@ -14,6 +14,8 @@ public interface FeedCommentReactionRepository extends JpaRepository<FeedComment
     List<FeedCommentReactionEntity> findByCommentIdInAndUserId(List<Long> commentIds, Long userId);
 
     void deleteByCommentIdAndUserId(Long commentId, Long userId);
+    void deleteByCommentId(Long commentId);
+    void deleteByCommentIdIn(List<Long> commentIds);
 
     @Query("""
             select r.comment.id as commentId, r.reactionType as reactionType, count(r) as totalCount

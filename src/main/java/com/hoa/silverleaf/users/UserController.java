@@ -3,6 +3,7 @@ package com.hoa.silverleaf.users;
 import com.hoa.silverleaf.users.dto.CreateResidentRequest;
 import com.hoa.silverleaf.users.dto.CreateResidentInviteRequest;
 import com.hoa.silverleaf.users.dto.AddHouseholdMemberRequest;
+import com.hoa.silverleaf.users.dto.CommunityMembershipResponse;
 import com.hoa.silverleaf.users.dto.HouseholdResponse;
 import com.hoa.silverleaf.users.dto.MeResponse;
 import com.hoa.silverleaf.users.dto.MyProfileResponse;
@@ -49,6 +50,12 @@ public class UserController {
         return userService.me();
     }
 
+    @GetMapping("/me/communities")
+    public java.util.List<CommunityMembershipResponse> myCommunities() {
+        log.debug("My communities requested");
+        return userService.listMyCommunities();
+    }
+
     @GetMapping("/me/profile")
     public MyProfileResponse myProfile() {
         log.debug("My profile requested");
@@ -93,7 +100,7 @@ public class UserController {
     }
 
     @GetMapping("/residents")
-    @PreAuthorize("hasAnyRole('HOA_ADMIN', 'ADMIN')")
+    @PreAuthorize("@communityAccessService.isCurrentCommunityAdmin(authentication.principal)")
     public Page<ResidentResponse> residents(
             @AuthenticationPrincipal com.hoa.silverleaf.security.AppUserPrincipal principal,
             @RequestParam(defaultValue = "0") int page,
@@ -105,7 +112,7 @@ public class UserController {
     }
 
     @PostMapping("/residents")
-    @PreAuthorize("hasAnyRole('HOA_ADMIN', 'ADMIN')")
+    @PreAuthorize("@communityAccessService.isCurrentCommunityAdmin(authentication.principal)")
     @ResponseStatus(HttpStatus.CREATED)
     public ResidentResponse createResident(
             @AuthenticationPrincipal com.hoa.silverleaf.security.AppUserPrincipal principal,
@@ -116,7 +123,7 @@ public class UserController {
     }
 
     @PostMapping("/residents/invitations")
-    @PreAuthorize("hasAnyRole('HOA_ADMIN', 'ADMIN')")
+    @PreAuthorize("@communityAccessService.isCurrentCommunityAdmin(authentication.principal)")
     @ResponseStatus(HttpStatus.CREATED)
     public ResidentInvitationResponse createResidentInvitation(
             @AuthenticationPrincipal com.hoa.silverleaf.security.AppUserPrincipal principal,
@@ -128,14 +135,14 @@ public class UserController {
     }
 
     @GetMapping("/residents/{id}")
-    @PreAuthorize("hasAnyRole('HOA_ADMIN', 'ADMIN')")
+    @PreAuthorize("@communityAccessService.isCurrentCommunityAdmin(authentication.principal)")
     public ResidentResponse residentById(@PathVariable Long id) {
         log.info("Resident details requested by HOA admin for userId={}", id);
         return userService.getResident(id);
     }
 
     @PutMapping("/residents/{id}")
-    @PreAuthorize("hasAnyRole('HOA_ADMIN', 'ADMIN')")
+    @PreAuthorize("@communityAccessService.isCurrentCommunityAdmin(authentication.principal)")
     public ResidentResponse updateResident(
             @AuthenticationPrincipal com.hoa.silverleaf.security.AppUserPrincipal principal,
             @PathVariable Long id,
@@ -146,16 +153,22 @@ public class UserController {
     }
 
     @PatchMapping("/residents/{id}/deactivate")
-    @PreAuthorize("hasAnyRole('HOA_ADMIN', 'ADMIN')")
-    public ResidentResponse deactivateResident(@PathVariable Long id) {
+    @PreAuthorize("@communityAccessService.isCurrentCommunityAdmin(authentication.principal)")
+    public ResidentResponse deactivateResident(
+            @AuthenticationPrincipal com.hoa.silverleaf.security.AppUserPrincipal principal,
+            @PathVariable Long id
+    ) {
         log.info("Resident deactivation requested by HOA admin for userId={}", id);
-        return userService.deactivateResident(id);
+        return userService.deactivateResident(principal, id);
     }
 
     @PatchMapping("/residents/{id}/activate")
-    @PreAuthorize("hasAnyRole('HOA_ADMIN', 'ADMIN')")
-    public ResidentResponse activateResident(@PathVariable Long id) {
+    @PreAuthorize("@communityAccessService.isCurrentCommunityAdmin(authentication.principal)")
+    public ResidentResponse activateResident(
+            @AuthenticationPrincipal com.hoa.silverleaf.security.AppUserPrincipal principal,
+            @PathVariable Long id
+    ) {
         log.info("Resident activation requested by HOA admin for userId={}", id);
-        return userService.activateResident(id);
+        return userService.activateResident(principal, id);
     }
 }

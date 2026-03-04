@@ -1,5 +1,6 @@
 package com.hoa.silverleaf.security;
 
+import com.hoa.silverleaf.community.CommunityEntity;
 import com.hoa.silverleaf.users.UserEntity;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -23,7 +24,7 @@ public class JwtService {
         this.jwtProperties = jwtProperties;
     }
 
-    public String generateAccessToken(UserEntity user) {
+    public String generateAccessToken(UserEntity user, CommunityEntity community) {
         Instant now = Instant.now();
         Instant expiresAt = now.plus(jwtProperties.getAccessTokenMinutes(), ChronoUnit.MINUTES);
         log.debug("Generating JWT access token userId={} role={} expiresAt={}",
@@ -33,6 +34,9 @@ public class JwtService {
                 .subject(user.getId().toString())
                 .claim("role", user.getRole().name())
                 .claim("email", user.getEmail())
+                .claim("activeCommunityId", community.getId())
+                .claim("activeCommunitySlug", community.getSlug())
+                .claim("activeCommunityName", community.getName())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiresAt))
                 .signWith(secretKey())

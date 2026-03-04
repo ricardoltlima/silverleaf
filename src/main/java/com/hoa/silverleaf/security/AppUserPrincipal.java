@@ -17,14 +17,41 @@ public class AppUserPrincipal implements UserDetails {
     private final String passwordHash;
     private final UserRole role;
     private final boolean enabled;
+    private final Long activeCommunityId;
+    private final String activeCommunitySlug;
+    private final String activeCommunityName;
 
     public AppUserPrincipal(UserEntity user) {
+        this(user, null, null, null);
+    }
+
+    public AppUserPrincipal(UserEntity user, Long activeCommunityId, String activeCommunitySlug, String activeCommunityName) {
         this.id = user.getId();
         this.email = user.getEmail();
         this.fullName = user.getFullName();
         this.passwordHash = user.getPasswordHash();
         this.role = user.getRole();
         this.enabled = user.isEnabled();
+        this.activeCommunityId = activeCommunityId;
+        this.activeCommunitySlug = activeCommunitySlug;
+        this.activeCommunityName = activeCommunityName;
+    }
+
+    public AppUserPrincipal(
+            AppUserPrincipal principal,
+            Long activeCommunityId,
+            String activeCommunitySlug,
+            String activeCommunityName
+    ) {
+        this.id = principal.id;
+        this.email = principal.email;
+        this.fullName = principal.fullName;
+        this.passwordHash = principal.passwordHash;
+        this.role = principal.role;
+        this.enabled = principal.enabled;
+        this.activeCommunityId = activeCommunityId;
+        this.activeCommunitySlug = activeCommunitySlug;
+        this.activeCommunityName = activeCommunityName;
     }
 
     public Long getId() {
@@ -37,6 +64,18 @@ public class AppUserPrincipal implements UserDetails {
 
     public String getFullName() {
         return fullName;
+    }
+
+    public Long getActiveCommunityId() {
+        return activeCommunityId;
+    }
+
+    public String getActiveCommunitySlug() {
+        return activeCommunitySlug;
+    }
+
+    public String getActiveCommunityName() {
+        return activeCommunityName;
     }
 
     @Override

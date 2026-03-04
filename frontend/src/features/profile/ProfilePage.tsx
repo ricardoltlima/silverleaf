@@ -25,8 +25,6 @@ type ServiceForm = {
   contactEmail: string;
   businessUrl: string;
   hours: string;
-  serviceArea: string;
-  visibility: "PUBLIC" | "GROUPS";
 };
 
 function dataUrlToFile(dataUrl: string, fileName: string): File {
@@ -76,9 +74,7 @@ export function ProfilePage() {
     contactPhone: "",
     contactEmail: "",
     businessUrl: "",
-    hours: "",
-    serviceArea: "Silverleaf Reserve",
-    visibility: "PUBLIC"
+    hours: ""
   });
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [photoDraft, setPhotoDraft] = useState<string | null>(null);
@@ -124,9 +120,7 @@ export function ProfilePage() {
       contactPhone: profileQuery.data.serviceContactPhone || "",
       contactEmail: profileQuery.data.serviceContactEmail || profileQuery.data.email || "",
       businessUrl: profileQuery.data.serviceBusinessUrl || "",
-      hours: profileQuery.data.serviceHours || "",
-      serviceArea: profileQuery.data.serviceArea || "Silverleaf Reserve",
-      visibility: profileQuery.data.serviceVisibility || "PUBLIC"
+      hours: profileQuery.data.serviceHours || ""
     });
   }, [profileQuery.data]);
 
@@ -149,8 +143,8 @@ export function ProfilePage() {
       serviceContactEmail: service.contactEmail || null,
       serviceBusinessUrl: service.businessUrl || null,
       serviceHours: service.hours || null,
-      serviceArea: service.serviceArea || null,
-      serviceVisibility: service.visibility
+      serviceArea: null,
+      serviceVisibility: undefined
     });
   };
 
@@ -343,30 +337,6 @@ export function ProfilePage() {
                 placeholder="Mon-Fri 8am-6pm"
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-leaf-600 focus:ring-2"
               />
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-slate-600">Service area</span>
-              <input
-                value={service.serviceArea}
-                onChange={(event) => setService((current) => ({ ...current, serviceArea: event.target.value }))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-leaf-600 focus:ring-2"
-              />
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-slate-600">Visibility</span>
-              <select
-                value={service.visibility}
-                onChange={(event) =>
-                  setService((current) => ({
-                    ...current,
-                    visibility: event.target.value as ServiceForm["visibility"]
-                  }))
-                }
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-leaf-600 focus:ring-2"
-              >
-                <option value="PUBLIC">Public to all residents</option>
-                <option value="GROUPS">Only my groups</option>
-              </select>
             </label>
           </div>
         ) : (

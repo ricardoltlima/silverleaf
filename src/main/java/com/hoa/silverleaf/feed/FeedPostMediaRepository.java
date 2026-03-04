@@ -7,4 +7,5 @@ import java.util.List;
 
 public interface FeedPostMediaRepository extends JpaRepository<FeedPostMediaEntity, Long> {
     List<FeedPostMediaEntity> findByPostIdInOrderBySortOrderAscIdAsc(Collection<Long> postIds);
+    void deleteByPostId(Long postId);
 }

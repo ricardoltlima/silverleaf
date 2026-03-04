@@ -23,8 +23,13 @@ public class ReactAppForwardController {
             "/app/alerts/",
             "/app/groups",
             "/app/groups/",
+            "/app/neighbors",
+            "/app/neighbors/",
+            "/app/neighbors/{neighborId}",
             "/app/reservations",
             "/app/reservations/",
+            "/app/report-violation",
+            "/app/report-violation/",
             "/app/violations",
             "/app/violations/",
             "/app/profile",
@@ -40,7 +45,9 @@ public class ReactAppForwardController {
             "/app/board/broadcasts",
             "/app/board/broadcasts/",
             "/app/board/polls",
-            "/app/board/polls/"
+            "/app/board/polls/",
+            "/app/board/reports",
+            "/app/board/reports/"
     })
     public String forwardReactAppRoutes() {
         // Forward known SPA routes to the React entrypoint so React Router handles client navigation.

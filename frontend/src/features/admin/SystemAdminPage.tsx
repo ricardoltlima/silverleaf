@@ -126,7 +126,7 @@ export function SystemAdminPage() {
                 Tenants: <span className="font-semibold">{stats.tenants}</span>
               </p>
               <p className="mt-1 text-sm text-slate-700">
-                HOA Admins: <span className="font-semibold">{stats.hoaAdmins}</span>
+                Global HOA Admins: <span className="font-semibold">{stats.hoaAdmins}</span>
               </p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">

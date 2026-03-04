@@ -2,12 +2,12 @@ import { FormEvent, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createBroadcast, fetchBroadcasts } from "@/features/board/boardApi";
 import { fetchCurrentUser } from "@/features/users/currentUserApi";
-import { isHoaManager } from "@/features/users/roleUtils";
+import { canManageCommunity } from "@/features/users/roleUtils";
 
 export function BoardBroadcastsPage() {
   const queryClient = useQueryClient();
   const meQuery = useQuery({ queryKey: ["me"], queryFn: fetchCurrentUser });
-  const isAdmin = isHoaManager(meQuery.data?.role);
+  const isAdmin = canManageCommunity(meQuery.data);
   const broadcastsQuery = useQuery({ queryKey: ["board", "broadcasts"], queryFn: fetchBroadcasts });
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -33,7 +33,7 @@ export function BoardBroadcastsPage() {
   return (
     <div className="space-y-4">
       {!isAdmin ? (
-        <section className="card p-4 text-sm text-rose-700">Only HOA admins can access this page.</section>
+        <section className="card p-4 text-sm text-rose-700">Only community admins can access this page.</section>
       ) : null}
       <section className="card p-4">
         <div className="mb-2 inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">Board</div>

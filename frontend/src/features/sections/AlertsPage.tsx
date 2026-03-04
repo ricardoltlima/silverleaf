@@ -1,25 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { fetchReactionAlerts, markReactionAlertsRead } from "@/features/alerts/alertsApi";
 import { fetchFeed } from "@/features/feed/feedApi";
 import { getGroupAlerts } from "@/features/groups/groupAlerts";
 import { getLastSeen, markGroupSeen } from "@/features/groups/groupsStorage";
+import { getLastSeenGroupRequestsAt, markGroupRequestsSeen } from "@/features/groups/groupRequestsStorage";
 import { approveGroupRequest, fetchGroupRequests, rejectGroupRequest } from "@/features/groups/groupsApi";
 import { fetchAllViolations, fetchBroadcasts, fetchPolls, votePoll } from "@/features/board/boardApi";
 import { getLastSeenViolationsAt, markViolationsSeen } from "@/features/board/violationsStorage";
 import { fetchCurrentUser } from "@/features/users/currentUserApi";
-import { canVoteInHoaPolls, isHoaManager } from "@/features/users/roleUtils";
+import { canManageCommunity, canVoteInHoaPolls } from "@/features/users/roleUtils";
 
 export function AlertsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [refreshVersion, setRefreshVersion] = useState(0);
   const meQuery = useQuery({ queryKey: ["me"], queryFn: fetchCurrentUser });
-  const isAdmin = isHoaManager(meQuery.data?.role);
+  const isAdmin = canManageCommunity(meQuery.data);
   const canVote = canVoteInHoaPolls(meQuery.data?.role);
 
   const broadcastsQuery = useQuery({ queryKey: ["alerts", "broadcasts"], queryFn: fetchBroadcasts });
   const pollsQuery = useQuery({ queryKey: ["alerts", "polls"], queryFn: fetchPolls });
+  const reactionAlertsQuery = useQuery({
+    queryKey: ["alerts", "reactions"],
+    queryFn: fetchReactionAlerts,
+    refetchInterval: 5000
+  });
   const groupRequestsQuery = useQuery({
     queryKey: ["alerts", "group-requests"],
     queryFn: fetchGroupRequests,
@@ -55,6 +62,12 @@ export function AlertsPage() {
       queryClient.invalidateQueries({ queryKey: ["groups", "requests"] });
     }
   });
+  const readReactionAlertsMutation = useMutation({
+    mutationFn: markReactionAlertsRead,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["alerts", "reactions"] });
+    }
+  });
 
   const groupFeedQuery = useInfiniteQuery({
     queryKey: ["feed", "group", "alerts", "all"],
@@ -85,6 +98,17 @@ export function AlertsPage() {
 
   const alerts = useMemo(() => getGroupAlerts(allPosts), [allPosts, refreshVersion]);
   const unreadCount = alerts.filter((alert) => alert.unread).length;
+  const reactionAlerts = reactionAlertsQuery.data ?? [];
+  const unreadReactionAlertCount = reactionAlerts.filter((alert) => alert.unread).length;
+  const groupRequestAlerts = useMemo(() => {
+    const lastSeenAt = getLastSeenGroupRequestsAt();
+    return (groupRequestsQuery.data ?? []).map((request) => ({
+      ...request,
+      unread:
+        !lastSeenAt || new Date(request.createdAt).getTime() > new Date(lastSeenAt).getTime()
+    }));
+  }, [groupRequestsQuery.data, refreshVersion]);
+  const unreadGroupRequestCount = groupRequestAlerts.filter((request) => request.unread).length;
   const violationAlerts = useMemo(() => {
     const lastSeenAt = getLastSeenViolationsAt();
     return (violationsQuery.data ?? []).map((item) => ({
@@ -120,6 +144,18 @@ export function AlertsPage() {
       markViolationsSeen(latestViolationAt);
     }
   };
+  const markGroupRequestAlertsRead = () => {
+    const latestRequestAt = groupRequestAlerts.reduce<string | null>((current, request) => {
+      if (!current) {
+        return request.createdAt;
+      }
+      return new Date(request.createdAt).getTime() > new Date(current).getTime() ? request.createdAt : current;
+    }, null);
+    if (latestRequestAt) {
+      markGroupRequestsSeen(latestRequestAt);
+      setRefreshVersion((current) => current + 1);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -127,7 +163,7 @@ export function AlertsPage() {
         <div className="mb-2 inline-flex rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-800">
           Alerts
         </div>
-        <h2 className="text-xl font-semibold text-slate-900">Community Alerts</h2>
+        <h2 className="app-page-title text-slate-900">Community Alerts</h2>
         <p className="mt-1 text-sm text-slate-600">
           Board announcements, active polls, and activity from groups you follow.
         </p>
@@ -135,7 +171,73 @@ export function AlertsPage() {
 
       <section className="card p-4">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-base font-semibold text-slate-900">Violations feed</h3>
+          <h3 className="app-section-title text-slate-900">Post reactions</h3>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-pink-500 px-2 py-1 text-xs font-semibold text-white">
+              {unreadReactionAlertCount} new
+            </span>
+            <button
+              type="button"
+              onClick={() => readReactionAlertsMutation.mutate()}
+              disabled={readReactionAlertsMutation.isPending || unreadReactionAlertCount === 0}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+            >
+              Mark as read
+            </button>
+          </div>
+        </div>
+        {reactionAlertsQuery.isLoading ? (
+          <p className="text-sm text-slate-500">Loading reaction alerts...</p>
+        ) : reactionAlertsQuery.isError ? (
+          <p className="text-sm text-rose-700">{(reactionAlertsQuery.error as Error).message}</p>
+        ) : reactionAlerts.length ? (
+          <div className="space-y-2">
+            {reactionAlerts.map((alert) => (
+              <button
+                key={`reaction-alert-${alert.id}`}
+                type="button"
+                onClick={() => {
+                  if (alert.unread) {
+                    readReactionAlertsMutation.mutate();
+                  }
+                  const target =
+                    alert.channel === "GROUP" && alert.groupSlug
+                      ? `/groups?group=${encodeURIComponent(alert.groupSlug)}&postId=${alert.postId}`
+                      : alert.channel === "SERVICES"
+                        ? `/services?postId=${alert.postId}`
+                        : `/community?postId=${alert.postId}`;
+                  navigate(target);
+                }}
+                className={`block w-full rounded-lg border p-3 text-left transition hover:bg-slate-50 ${
+                  alert.unread ? "border-pink-200 bg-pink-50/50" : "border-slate-200"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-pink-700">Reaction</p>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                      alert.unread ? "bg-pink-100 text-pink-700" : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {alert.unread ? "NEW" : "READ"}
+                  </span>
+                </div>
+                <p className="feed-author-name mt-1 text-slate-900">
+                  {alert.actorName} {alert.reactionType === "HEART" ? "liked" : "gave a thumbs up to"} your post
+                </p>
+                <p className="feed-post-copy mt-1 line-clamp-2 text-slate-700">{alert.postPreview}</p>
+                <p className="feed-meta mt-2 text-slate-500">{new Date(alert.createdAt).toLocaleString()}</p>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">No post reaction alerts yet.</p>
+        )}
+      </section>
+
+      <section className="card p-4">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="app-section-title text-slate-900">Violations feed</h3>
           {isAdmin ? (
             <div className="flex items-center gap-2">
               <span className="rounded-full bg-rose-600 px-2 py-1 text-xs font-semibold text-white">
@@ -152,7 +254,7 @@ export function AlertsPage() {
           ) : null}
         </div>
         {!isAdmin ? (
-          <p className="text-sm text-slate-500">Violation alerts are visible only to HOA admins.</p>
+          <p className="text-sm text-slate-500">Violation alerts are visible only to community admins.</p>
         ) : violationsQuery.isLoading ? (
           <p className="text-sm text-slate-500">Loading violations...</p>
         ) : violationsQuery.isError ? (
@@ -183,9 +285,9 @@ export function AlertsPage() {
                     {item.unread ? "NEW" : "READ"}
                   </span>
                 </div>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{item.reporterName} sent a new violation report</p>
-                <p className="mt-1 line-clamp-2 text-sm text-slate-700">{item.description}</p>
-                <p className="mt-2 text-xs text-slate-500">{new Date(item.createdAt).toLocaleString()}</p>
+                <p className="feed-author-name mt-1 text-slate-900">{item.reporterName} sent a new violation report</p>
+                <p className="feed-post-copy mt-1 line-clamp-2 text-slate-700">{item.description}</p>
+                <p className="feed-meta mt-2 text-slate-500">{new Date(item.createdAt).toLocaleString()}</p>
               </button>
             ))}
           </div>
@@ -195,7 +297,7 @@ export function AlertsPage() {
       </section>
 
       <section className="card p-4">
-        <h3 className="mb-2 text-base font-semibold text-slate-900">Board messages</h3>
+        <h3 className="app-section-title mb-2 text-slate-900">Board messages</h3>
         {broadcastsQuery.isLoading ? <p className="text-sm text-slate-500">Loading board messages...</p> : null}
         {broadcastsQuery.isError ? (
           <p className="text-sm text-rose-700">{(broadcastsQuery.error as Error).message}</p>
@@ -204,9 +306,9 @@ export function AlertsPage() {
           <div className="space-y-2">
             {broadcastsQuery.data.map((broadcast) => (
               <article key={broadcast.id} className="rounded-lg border border-blue-200 bg-blue-50 p-3">
-                <p className="text-sm font-semibold text-slate-900">{broadcast.title}</p>
-                <p className="mt-1 text-sm text-slate-700">{broadcast.body}</p>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="feed-author-name text-slate-900">{broadcast.title}</p>
+                <p className="feed-post-copy mt-1 text-slate-700">{broadcast.body}</p>
+                <p className="feed-meta mt-1 text-slate-500">
                   {broadcast.authorName} - {new Date(broadcast.createdAt).toLocaleString()}
                 </p>
               </article>
@@ -218,7 +320,7 @@ export function AlertsPage() {
       </section>
 
       <section className="card p-4">
-        <h3 className="mb-2 text-base font-semibold text-slate-900">Active polls</h3>
+        <h3 className="app-section-title mb-2 text-slate-900">Active polls</h3>
         {pollsQuery.isLoading ? <p className="text-sm text-slate-500">Loading polls...</p> : null}
         {pollsQuery.isError ? <p className="text-sm text-rose-700">{(pollsQuery.error as Error).message}</p> : null}
         {pollsQuery.data?.length ? (
@@ -227,8 +329,8 @@ export function AlertsPage() {
               const totalVotes = poll.voteCounts.reduce((sum, current) => sum + current, 0);
               return (
                 <article key={poll.id} className="rounded-lg border border-violet-200 bg-violet-50 p-3">
-                  <p className="text-sm font-semibold text-slate-900">{poll.question}</p>
-                  <p className="mt-1 text-xs text-slate-500">{totalVotes} vote(s)</p>
+                  <p className="feed-author-name text-slate-900">{poll.question}</p>
+                  <p className="feed-meta mt-1 text-slate-500">{totalVotes} vote(s)</p>
                   <div className="mt-2 grid gap-2 md:grid-cols-2">
                     {poll.options.map((option, index) => {
                       const voted = poll.viewerVoteIndex === index;
@@ -245,7 +347,7 @@ export function AlertsPage() {
                           } disabled:opacity-60`}
                         >
                           <span className="font-medium">{option}</span>
-                          <span className="ml-1 text-xs text-slate-500">({poll.voteCounts[index] ?? 0})</span>
+                            <span className="feed-meta ml-1 text-slate-500">({poll.voteCounts[index] ?? 0})</span>
                         </button>
                       );
                     })}
@@ -263,33 +365,57 @@ export function AlertsPage() {
       </section>
 
       <section className="card p-4">
-        <h3 className="mb-2 text-base font-semibold text-slate-900">Group requests</h3>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="app-section-title text-slate-900">Group requests</h3>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-amber-500 px-2 py-1 text-xs font-semibold text-white">
+              {unreadGroupRequestCount} new
+            </span>
+            <button
+              type="button"
+              onClick={markGroupRequestAlertsRead}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100"
+            >
+              Mark as read
+            </button>
+          </div>
+        </div>
         {groupRequestsQuery.isLoading ? <p className="text-sm text-slate-500">Loading group requests...</p> : null}
         {groupRequestsQuery.isError ? (
           <p className="text-sm text-rose-700">{(groupRequestsQuery.error as Error).message}</p>
         ) : null}
-        {groupRequestsQuery.data?.length ? (
+        {groupRequestAlerts.length ? (
           <div className="space-y-2">
-            {groupRequestsQuery.data.map((request) => (
+            {groupRequestAlerts.map((request) => (
               <article key={request.requestId} className="rounded-lg border border-amber-200 bg-amber-50 p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">New request for {request.groupName}</p>
-                    <p className="mt-1 text-sm text-slate-700">
+                    <p className="feed-author-name text-slate-900">New request for {request.groupName}</p>
+                    <p className="feed-post-copy mt-1 text-slate-700">
                       {request.requesterName} wants to join your private group.
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="feed-meta mt-1 text-slate-500">
                       {request.requesterEmail} - {new Date(request.createdAt).toLocaleString()}
                     </p>
                   </div>
-                  <span className="rounded-full bg-white px-2 py-1 text-[10px] font-semibold text-amber-700">
-                    NEW
+                  <span
+                    className={`rounded-full px-2 py-1 text-[10px] font-semibold ${
+                      request.unread ? "bg-white text-amber-700" : "bg-amber-100 text-amber-900"
+                    }`}
+                  >
+                    {request.unread ? "NEW" : "READ"}
                   </span>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={() => navigate("/groups?allGroups=1")}
+                    onClick={() => {
+                      if (request.unread) {
+                        markGroupRequestsSeen(request.createdAt);
+                        setRefreshVersion((current) => current + 1);
+                      }
+                      navigate("/groups?allGroups=1");
+                    }}
                     className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100"
                   >
                     Open group
@@ -321,7 +447,7 @@ export function AlertsPage() {
 
       <section className="card p-4">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-base font-semibold text-slate-900">Groups activity</h3>
+          <h3 className="app-section-title text-slate-900">Groups activity</h3>
           <div className="flex items-center gap-2">
             <span className="rounded-full bg-rose-600 px-2 py-1 text-xs font-semibold text-white">{unreadCount} new</span>
             <button
@@ -370,9 +496,9 @@ export function AlertsPage() {
                     {alert.unread ? "NEW" : "READ"}
                   </span>
                 </div>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{alert.authorName} posted a new message</p>
-                <p className="mt-1 line-clamp-2 text-sm text-slate-700">{alert.text || "Media post"}</p>
-                <p className="mt-2 text-xs text-slate-500">{new Date(alert.createdAt).toLocaleString()}</p>
+                <p className="feed-author-name mt-1 text-slate-900">{alert.authorName} posted a new message</p>
+                <p className="feed-post-copy mt-1 line-clamp-2 text-slate-700">{alert.text || "Media post"}</p>
+                <p className="feed-meta mt-2 text-slate-500">{new Date(alert.createdAt).toLocaleString()}</p>
               </button>
             ))}
           </div>

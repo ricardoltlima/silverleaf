@@ -1,5 +1,6 @@
 package com.hoa.silverleaf.houses;
 
+import com.hoa.silverleaf.community.CommunityEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -7,6 +8,9 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -20,6 +24,10 @@ public class HouseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "community_id", nullable = false)
+    private CommunityEntity community;
 
     @Column(nullable = false, unique = true, length = 255)
     private String address;
@@ -48,6 +56,14 @@ public class HouseEntity {
 
     public String getAddress() {
         return address;
+    }
+
+    public CommunityEntity getCommunity() {
+        return community;
+    }
+
+    public void setCommunity(CommunityEntity community) {
+        this.community = community;
     }
 
     public void setAddress(String address) {

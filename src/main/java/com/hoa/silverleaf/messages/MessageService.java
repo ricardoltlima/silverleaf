@@ -1,6 +1,7 @@
 package com.hoa.silverleaf.messages;
 
 import com.hoa.silverleaf.common.NotFoundException;
+import com.hoa.silverleaf.community.CommunityAccessService;
 import com.hoa.silverleaf.messages.dto.CreateDirectMessageRequest;
 import com.hoa.silverleaf.messages.dto.DirectConversationResponse;
 import com.hoa.silverleaf.messages.dto.DirectMessageResponse;
@@ -24,23 +25,35 @@ public class MessageService {
 
     private final DirectMessageRepository directMessageRepository;
     private final UserRepository userRepository;
+    private final CommunityAccessService communityAccessService;
 
-    public MessageService(DirectMessageRepository directMessageRepository, UserRepository userRepository) {
+    public MessageService(
+            DirectMessageRepository directMessageRepository,
+            UserRepository userRepository,
+            CommunityAccessService communityAccessService
+    ) {
         this.directMessageRepository = directMessageRepository;
         this.userRepository = userRepository;
+        this.communityAccessService = communityAccessService;
     }
 
     @Transactional(readOnly = true)
     public UnreadCountResponse unreadCount(AppUserPrincipal principal) {
-        long count = directMessageRepository.countByRecipientIdAndReadAtIsNull(principal.getId());
+        long count = directMessageRepository.countByCommunityIdAndRecipientIdAndReadAtIsNull(
+                communityAccessService.requireCommunityIdForPrincipal(principal),
+                principal.getId()
+        );
         return new UnreadCountResponse(count);
     }
 
     @Transactional(readOnly = true)
     public List<DirectConversationResponse> conversations(AppUserPrincipal principal) {
         Long myUserId = principal.getId();
+        Long communityId = communityAccessService.requireCommunityIdForPrincipal(principal);
         List<DirectMessageEntity> messages =
-                directMessageRepository.findBySenderIdOrRecipientIdOrderByCreatedAtDescIdDesc(myUserId, myUserId);
+                directMessageRepository.findByCommunityIdAndSenderIdOrCommunityIdAndRecipientIdOrderByCreatedAtDescIdDesc(
+                        communityId, myUserId, communityId, myUserId
+                );
 
         Map<Long, DirectConversationAccumulator> byOtherUser = new LinkedHashMap<>();
         for (DirectMessageEntity message : messages) {
@@ -79,11 +92,13 @@ public class MessageService {
 
     @Transactional(readOnly = true)
     public List<DirectMessageResponse> thread(AppUserPrincipal principal, Long otherUserId) {
+        communityAccessService.requireUsersInSameCommunity(principal, otherUserId);
+        Long communityId = communityAccessService.requireCommunityIdForPrincipal(principal);
         UserEntity otherUser = userRepository.findById(otherUserId)
                 .orElseThrow(() -> new NotFoundException("Recipient user not found"));
         List<DirectMessageEntity> messages =
-                directMessageRepository.findBySenderIdAndRecipientIdOrSenderIdAndRecipientIdOrderByCreatedAtAscIdAsc(
-                        principal.getId(), otherUserId, otherUserId, principal.getId()
+                directMessageRepository.findByCommunityIdAndSenderIdAndRecipientIdOrCommunityIdAndSenderIdAndRecipientIdOrderByCreatedAtAscIdAsc(
+                        communityId, principal.getId(), otherUserId, communityId, otherUserId, principal.getId()
                 );
         return messages.stream().map(this::toResponse).toList();
     }
@@ -97,8 +112,10 @@ public class MessageService {
                 .orElseThrow(() -> new NotFoundException("Sender not found"));
         UserEntity recipient = userRepository.findById(request.recipientUserId())
                 .orElseThrow(() -> new NotFoundException("Recipient user not found"));
+        communityAccessService.requireUsersInSameCommunity(principal, recipient.getId());
 
         DirectMessageEntity message = new DirectMessageEntity();
+        message.setCommunity(communityAccessService.requireCommunityForPrincipal(principal));
         message.setSender(sender);
         message.setRecipient(recipient);
         message.setBodyText(request.body().trim());
@@ -110,10 +127,12 @@ public class MessageService {
 
     @Transactional
     public void markThreadAsRead(AppUserPrincipal principal, Long otherUserId) {
+        communityAccessService.requireUsersInSameCommunity(principal, otherUserId);
+        Long communityId = communityAccessService.requireCommunityIdForPrincipal(principal);
         Instant now = Instant.now();
         List<DirectMessageEntity> messages =
-                directMessageRepository.findBySenderIdAndRecipientIdOrSenderIdAndRecipientIdOrderByCreatedAtAscIdAsc(
-                        principal.getId(), otherUserId, otherUserId, principal.getId()
+                directMessageRepository.findByCommunityIdAndSenderIdAndRecipientIdOrCommunityIdAndSenderIdAndRecipientIdOrderByCreatedAtAscIdAsc(
+                        communityId, principal.getId(), otherUserId, communityId, otherUserId, principal.getId()
                 );
         int updated = 0;
         for (DirectMessageEntity message : messages) {
@@ -123,6 +142,7 @@ public class MessageService {
             }
         }
         if (updated > 0) {
+            directMessageRepository.saveAll(messages);
             log.debug("Marked thread as read currentUserId={} otherUserId={} updatedMessages={}",
                     principal.getId(), otherUserId, updated);
         }

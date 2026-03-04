@@ -1,6 +1,7 @@
 package com.hoa.silverleaf.garagesales;
 
 import com.hoa.silverleaf.common.NotFoundException;
+import com.hoa.silverleaf.community.CommunityAccessService;
 import com.hoa.silverleaf.garagesales.dto.CreateGarageSaleItemMediaRequest;
 import com.hoa.silverleaf.garagesales.dto.CreateGarageSaleItemRequest;
 import com.hoa.silverleaf.garagesales.dto.GarageSaleItemMediaResponse;
@@ -24,20 +25,25 @@ public class GarageSaleService {
     private final GarageSaleItemRepository garageSaleItemRepository;
     private final GarageSaleItemMediaRepository garageSaleItemMediaRepository;
     private final UserRepository userRepository;
+    private final CommunityAccessService communityAccessService;
 
     public GarageSaleService(
             GarageSaleItemRepository garageSaleItemRepository,
             GarageSaleItemMediaRepository garageSaleItemMediaRepository,
-            UserRepository userRepository
+            UserRepository userRepository,
+            CommunityAccessService communityAccessService
     ) {
         this.garageSaleItemRepository = garageSaleItemRepository;
         this.garageSaleItemMediaRepository = garageSaleItemMediaRepository;
         this.userRepository = userRepository;
+        this.communityAccessService = communityAccessService;
     }
 
     @Transactional(readOnly = true)
-    public List<GarageSaleItemResponse> listItems() {
-        List<GarageSaleItemEntity> items = garageSaleItemRepository.findAllByOrderByCreatedAtDescIdDesc();
+    public List<GarageSaleItemResponse> listItems(AppUserPrincipal principal) {
+        List<GarageSaleItemEntity> items = garageSaleItemRepository.findAllByCommunityIdOrderByCreatedAtDescIdDesc(
+                communityAccessService.requireCommunityIdForPrincipal(principal)
+        );
         List<Long> itemIds = items.stream().map(GarageSaleItemEntity::getId).toList();
         Map<Long, List<GarageSaleItemMediaResponse>> mediaByItemId = loadMediaByItemIds(itemIds);
 
@@ -52,6 +58,7 @@ public class GarageSaleService {
                 .orElseThrow(() -> new NotFoundException("User not found"));
 
         GarageSaleItemEntity item = new GarageSaleItemEntity();
+        item.setCommunity(communityAccessService.requireCommunityForPrincipal(principal));
         item.setSeller(seller);
         item.setTitle(request.title().trim());
         item.setPriceLabel(request.price().trim());

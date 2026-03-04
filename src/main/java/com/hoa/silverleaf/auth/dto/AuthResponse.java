@@ -5,6 +5,9 @@ import java.time.Instant;
 public record AuthResponse(
         String accessToken,
         String refreshToken,
-        Instant accessTokenExpiresAt
+        Instant accessTokenExpiresAt,
+        Long activeCommunityId,
+        String activeCommunitySlug,
+        String activeCommunityName
 ) {
 }

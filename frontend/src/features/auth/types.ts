@@ -2,6 +2,9 @@ export type AuthResponse = {
   accessToken: string;
   refreshToken: string;
   accessTokenExpiresAt: string;
+  activeCommunityId: number;
+  activeCommunitySlug: string;
+  activeCommunityName: string;
 };
 
 export type LoginPayload = {

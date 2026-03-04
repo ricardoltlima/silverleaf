@@ -1,6 +1,10 @@
 package com.hoa.silverleaf.users;
 
 import com.hoa.silverleaf.common.NotFoundException;
+import com.hoa.silverleaf.community.CommunityAccessService;
+import com.hoa.silverleaf.community.ResidentCommunityMembershipEntity;
+import com.hoa.silverleaf.community.ResidentCommunityMembershipRepository;
+import com.hoa.silverleaf.community.ResidentCommunityMembershipService;
 import com.hoa.silverleaf.houses.HouseEntity;
 import com.hoa.silverleaf.houses.HouseResidentEntity;
 import com.hoa.silverleaf.houses.HouseResidentRepository;
@@ -20,6 +24,7 @@ import com.hoa.silverleaf.users.dto.MeResponse;
 import com.hoa.silverleaf.users.dto.MyProfileResponse;
 import com.hoa.silverleaf.users.dto.NeighborListItemResponse;
 import com.hoa.silverleaf.users.dto.NeighborProfileResponse;
+import com.hoa.silverleaf.users.dto.CommunityMembershipResponse;
 import com.hoa.silverleaf.users.dto.ResidentResponse;
 import com.hoa.silverleaf.users.dto.ResidentInvitationResponse;
 import com.hoa.silverleaf.users.dto.UpdateMyProfileRequest;
@@ -53,6 +58,9 @@ public class UserService {
     private final OnboardingNotificationService onboardingNotificationService;
     private final PasswordEncoder passwordEncoder;
     private final ProfilePhotoStorageService profilePhotoStorageService;
+    private final CommunityAccessService communityAccessService;
+    private final ResidentCommunityMembershipService residentCommunityMembershipService;
+    private final ResidentCommunityMembershipRepository residentCommunityMembershipRepository;
 
     public UserService(
             UserRepository userRepository,
@@ -61,7 +69,10 @@ public class UserService {
             ResidentInvitationRepository residentInvitationRepository,
             OnboardingNotificationService onboardingNotificationService,
             PasswordEncoder passwordEncoder,
-            ProfilePhotoStorageService profilePhotoStorageService
+            ProfilePhotoStorageService profilePhotoStorageService,
+            CommunityAccessService communityAccessService,
+            ResidentCommunityMembershipService residentCommunityMembershipService,
+            ResidentCommunityMembershipRepository residentCommunityMembershipRepository
     ) {
         this.userRepository = userRepository;
         this.houseResidentRepository = houseResidentRepository;
@@ -70,6 +81,9 @@ public class UserService {
         this.onboardingNotificationService = onboardingNotificationService;
         this.passwordEncoder = passwordEncoder;
         this.profilePhotoStorageService = profilePhotoStorageService;
+        this.communityAccessService = communityAccessService;
+        this.residentCommunityMembershipService = residentCommunityMembershipService;
+        this.residentCommunityMembershipRepository = residentCommunityMembershipRepository;
     }
 
     public MeResponse me() {
@@ -77,29 +91,59 @@ public class UserService {
         log.debug("Authenticated principal resolved. userId={}, email={}", principal.getId(), principal.getUsername());
         UserEntity user = userRepository.findById(principal.getId())
                 .orElseThrow(() -> new NotFoundException("User not found"));
-        return new MeResponse(user.getId(), user.getEmail(), user.getFullName(), user.getRole(), user.getPhotoUrl());
+        return new MeResponse(
+                user.getId(),
+                user.getEmail(),
+                user.getFullName(),
+                user.getRole(),
+                user.getPhotoUrl(),
+                principal.getActiveCommunityId(),
+                principal.getActiveCommunitySlug(),
+                principal.getActiveCommunityName(),
+                communityAccessService.isCurrentCommunityAdmin(principal)
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public List<CommunityMembershipResponse> listMyCommunities() {
+        AppUserPrincipal principal = requirePrincipal();
+        return residentCommunityMembershipRepository.findByResidentIdOrderByActiveDescUpdatedAtDescIdDesc(principal.getId()).stream()
+                .map(membership -> toCommunityMembershipResponse(
+                        membership,
+                        membership.getCommunity().getId().equals(principal.getActiveCommunityId())
+                ))
+                .toList();
     }
 
     @Transactional(readOnly = true)
     public Page<ResidentResponse> listResidents(AppUserPrincipal principal, int page, int size, String q) {
+        communityAccessService.requireCurrentCommunityAdmin(principal);
         // Guardrails prevent abusive page sizes and negative offsets from clients.
         int pageNumber = Math.max(0, page);
         int pageSize = Math.max(1, Math.min(size, 100));
         String normalizedQuery = q == null ? "" : q.trim();
         var pageable = PageRequest.of(pageNumber, pageSize, Sort.by(Sort.Direction.DESC, "id"));
+        Long communityId = communityAccessService.requireCommunityIdForPrincipal(principal);
         Set<UserRole> roles = listableRolesFor(principal);
+        List<Long> residentIds = residentCommunityMembershipRepository.findActiveResidentIdsByCommunityId(
+                communityId
+        );
+
+        if (residentIds.isEmpty()) {
+            return Page.empty(pageable);
+        }
 
         log.debug("Listing residents page={}, size={}, q='{}'", pageNumber, pageSize, normalizedQuery);
         if (normalizedQuery.isBlank()) {
-            Page<ResidentResponse> residents = userRepository.findByRoleIn(roles, pageable)
-                    .map(this::toResidentResponse);
+            Page<ResidentResponse> residents = userRepository.findByIdInAndRoleIn(residentIds, roles, pageable)
+                    .map(user -> toResidentResponse(user, communityId));
             log.debug("Residents listed without query resultCount={} page={} size={}",
                     residents.getNumberOfElements(), pageNumber, pageSize);
             return residents;
         }
 
-        Page<ResidentResponse> residents = userRepository.searchByRoleInAndQuery(roles, normalizedQuery, pageable)
-                .map(this::toResidentResponse);
+        Page<ResidentResponse> residents = userRepository.searchByIdInAndRoleInAndQuery(residentIds, roles, normalizedQuery, pageable)
+                .map(user -> toResidentResponse(user, communityId));
         log.debug("Residents listed with query='{}' resultCount={} page={} size={}",
                 normalizedQuery, residents.getNumberOfElements(), pageNumber, pageSize);
         return residents;
@@ -108,7 +152,13 @@ public class UserService {
     @Transactional(readOnly = true)
     public List<NeighborListItemResponse> listNeighbors() {
         AppUserPrincipal principal = requirePrincipal();
-        List<UserEntity> residents = userRepository.findByRoleInAndEnabledTrueOrderByFullNameAsc(Set.of(UserRole.RESIDENT, UserRole.TENANT, UserRole.HOA_ADMIN)).stream()
+        List<Long> residentIds = residentCommunityMembershipRepository.findActiveResidentIdsByCommunityId(
+                communityAccessService.requireCommunityIdForPrincipal(principal)
+        );
+        List<UserEntity> residents = userRepository.findByIdInAndRoleInAndEnabledTrueOrderByFullNameAsc(
+                        residentIds,
+                        Set.of(UserRole.RESIDENT, UserRole.TENANT, UserRole.HOA_ADMIN)
+                ).stream()
                 .filter(user -> !user.getId().equals(principal.getId()))
                 .toList();
         Map<Long, String> addressesByResidentId = resolveActiveAddresses(
@@ -129,6 +179,7 @@ public class UserService {
     @Transactional(readOnly = true)
     public NeighborProfileResponse getNeighborProfile(Long neighborId) {
         AppUserPrincipal principal = requirePrincipal();
+        communityAccessService.requireUsersInSameCommunity(principal, neighborId);
         if (principal.getId().equals(neighborId)) {
             log.debug("Neighbor profile requested for current user userId={}", neighborId);
         }
@@ -158,12 +209,14 @@ public class UserService {
 
     @Transactional
     public ResidentResponse createResident(AppUserPrincipal principal, CreateResidentRequest request) {
+        communityAccessService.requireCurrentCommunityAdmin(principal);
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
         if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
             log.warn("Resident creation rejected because email already exists: {}", normalizedEmail);
             throw new IllegalArgumentException("Email already registered");
         }
         UserRole requestedRole = assignableRoleFor(principal, request.role());
+        boolean communityAdmin = normalizeCommunityAdminAssignment(principal, requestedRole, request.communityAdmin(), false);
 
         UserEntity user = new UserEntity();
         user.setFullName(request.fullName().trim());
@@ -172,23 +225,29 @@ public class UserService {
         user.setRole(requestedRole);
 
         UserEntity savedUser = userRepository.save(user);
+        var community = communityAccessService.requireCommunityForPrincipal(principal);
+        residentCommunityMembershipService.activateMembership(savedUser, community);
+        residentCommunityMembershipService.syncCommunityAdmin(savedUser, community, communityAdmin);
         log.info("Resident created successfully. userId={}, email={}", savedUser.getId(), savedUser.getEmail());
-        return toResidentResponse(savedUser);
+        return toResidentResponse(savedUser, community.getId());
     }
 
     @Transactional
     public ResidentInvitationResponse createResidentInvitation(AppUserPrincipal principal, CreateResidentInviteRequest request) {
+        communityAccessService.requireCurrentCommunityAdmin(principal);
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
         if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
             log.warn("Resident invitation rejected because email already exists: {}", normalizedEmail);
             throw new IllegalArgumentException("Email already registered");
         }
         UserRole requestedRole = assignableRoleFor(principal, request.role());
+        boolean communityAdmin = normalizeCommunityAdminAssignment(principal, requestedRole, request.communityAdmin(), false);
 
         UserEntity invitedBy = userRepository.findById(principal.getId())
                 .orElseThrow(() -> new NotFoundException("Inviting admin not found"));
         HouseEntity house = houseRepository.findById(request.houseId())
                 .orElseThrow(() -> new NotFoundException("House not found"));
+        communityAccessService.requireHouseInUserCommunity(principal.getId(), house);
 
         UserEntity resident = new UserEntity();
         resident.setFullName(request.fullName().trim());
@@ -197,6 +256,8 @@ public class UserService {
         resident.setRole(requestedRole);
         resident.setEnabled(true);
         UserEntity savedResident = userRepository.save(resident);
+        residentCommunityMembershipService.activateMembership(savedResident, house.getCommunity());
+        residentCommunityMembershipService.syncCommunityAdmin(savedResident, house.getCommunity(), communityAdmin);
 
         ResidentInvitationEntity invitation = new ResidentInvitationEntity();
         invitation.setResident(savedResident);
@@ -231,14 +292,19 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public ResidentResponse getResident(Long id) {
+        AppUserPrincipal principal = requirePrincipal();
+        communityAccessService.requireCurrentCommunityAdmin(principal);
+        communityAccessService.requireUsersInSameCommunity(principal, id);
         log.debug("Resident details requested userId={}", id);
         UserEntity resident = userRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Resident not found"));
-        return toResidentResponse(resident);
+        return toResidentResponse(resident, communityAccessService.requireCommunityIdForPrincipal(principal));
     }
 
     @Transactional
     public ResidentResponse updateResident(AppUserPrincipal principal, Long id, UpdateResidentRequest request) {
+        communityAccessService.requireCurrentCommunityAdmin(principal);
+        communityAccessService.requireUsersInSameCommunity(principal, id);
         UserEntity resident = userRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Resident not found"));
 
@@ -252,18 +318,31 @@ public class UserService {
         resident.setFullName(request.fullName().trim());
         resident.setEmail(normalizedEmail);
         resident.setRole(assignableRoleFor(principal, request.role() == null ? resident.getRole() : request.role()));
+        boolean communityAdmin = normalizeCommunityAdminAssignment(
+                principal,
+                resident.getRole(),
+                request.communityAdmin(),
+                currentCommunityAdminFor(principal, resident.getId())
+        );
         if (request.password() != null) {
             resident.setPasswordHash(passwordEncoder.encode(request.password()));
             log.info("Resident password reset by admin for userId={}", id);
         }
 
         UserEntity savedResident = userRepository.save(resident);
+        residentCommunityMembershipService.syncCommunityAdmin(
+                savedResident,
+                communityAccessService.requireCommunityForPrincipal(principal),
+                communityAdmin
+        );
         log.info("Resident updated successfully. userId={}, email={}", savedResident.getId(), savedResident.getEmail());
-        return toResidentResponse(savedResident);
+        return toResidentResponse(savedResident, communityAccessService.requireCommunityIdForPrincipal(principal));
     }
 
     @Transactional
-    public ResidentResponse deactivateResident(Long id) {
+    public ResidentResponse deactivateResident(AppUserPrincipal principal, Long id) {
+        communityAccessService.requireCurrentCommunityAdmin(principal);
+        communityAccessService.requireUsersInSameCommunity(principal, id);
         UserEntity resident = userRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Resident not found"));
         if (!resident.isEnabled()) {
@@ -272,11 +351,13 @@ public class UserService {
         resident.setEnabled(false);
         UserEntity savedResident = userRepository.save(resident);
         log.info("Resident deactivated. userId={}, email={}", savedResident.getId(), savedResident.getEmail());
-        return toResidentResponse(savedResident);
+        return toResidentResponse(savedResident, communityAccessService.requireCommunityIdForPrincipal(principal));
     }
 
     @Transactional
-    public ResidentResponse activateResident(Long id) {
+    public ResidentResponse activateResident(AppUserPrincipal principal, Long id) {
+        communityAccessService.requireCurrentCommunityAdmin(principal);
+        communityAccessService.requireUsersInSameCommunity(principal, id);
         UserEntity resident = userRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Resident not found"));
         if (resident.isEnabled()) {
@@ -285,16 +366,19 @@ public class UserService {
         resident.setEnabled(true);
         UserEntity savedResident = userRepository.save(resident);
         log.info("Resident activated. userId={}, email={}", savedResident.getId(), savedResident.getEmail());
-        return toResidentResponse(savedResident);
+        return toResidentResponse(savedResident, communityAccessService.requireCommunityIdForPrincipal(principal));
     }
 
-    private ResidentResponse toResidentResponse(UserEntity user) {
+    private ResidentResponse toResidentResponse(UserEntity user, Long communityId) {
         return new ResidentResponse(
                 user.getId(),
                 user.getEmail(),
                 user.getFullName(),
                 user.getRole(),
-                user.isEnabled()
+                user.isEnabled(),
+                residentCommunityMembershipRepository.findByResidentIdAndCommunityId(user.getId(), communityId)
+                        .map(ResidentCommunityMembershipEntity::isCommunityAdmin)
+                        .orElse(false)
         );
     }
 
@@ -359,7 +443,17 @@ public class UserService {
         UserEntity saved = userRepository.save(user);
         profilePhotoStorageService.deleteIfLocal(oldPhotoUrl);
         log.info("Self-service profile photo updated userId={} photoUrl={}", saved.getId(), saved.getPhotoUrl());
-        return new MeResponse(saved.getId(), saved.getEmail(), saved.getFullName(), saved.getRole(), saved.getPhotoUrl());
+        return new MeResponse(
+                saved.getId(),
+                saved.getEmail(),
+                saved.getFullName(),
+                saved.getRole(),
+                saved.getPhotoUrl(),
+                principal.getActiveCommunityId(),
+                principal.getActiveCommunitySlug(),
+                principal.getActiveCommunityName(),
+                communityAccessService.isCurrentCommunityAdmin(principal)
+        );
     }
 
     @Transactional(readOnly = true)
@@ -392,6 +486,7 @@ public class UserService {
         resident.setActive(true);
         resident.setMovedInAt(Instant.now());
         houseResidentRepository.save(resident);
+        residentCommunityMembershipService.activateMembership(resident.getResident(), house.getCommunity());
         log.info("Household member added houseId={} email={}", house.getId(), normalizedEmail);
         return toHouseholdResponse(house);
     }
@@ -500,7 +595,7 @@ public class UserService {
         if (principal.getRole() == UserRole.ADMIN) {
             return normalizedRole;
         }
-        if (principal.getRole() != UserRole.HOA_ADMIN) {
+        if (!communityAccessService.isCurrentCommunityAdmin(principal)) {
             throw new IllegalArgumentException("User cannot manage resident roles");
         }
         if (normalizedRole == UserRole.ADMIN || normalizedRole == UserRole.HOA_ADMIN) {
@@ -515,5 +610,45 @@ public class UserService {
             token = java.util.UUID.randomUUID().toString().replace("-", "");
         } while (residentInvitationRepository.existsByInvitationToken(token));
         return token;
+    }
+
+    private boolean currentCommunityAdminFor(AppUserPrincipal principal, Long residentId) {
+        return residentCommunityMembershipRepository.findByResidentIdAndCommunityId(
+                        residentId,
+                        communityAccessService.requireCommunityIdForPrincipal(principal)
+                )
+                .map(ResidentCommunityMembershipEntity::isCommunityAdmin)
+                .orElse(false);
+    }
+
+    private boolean normalizeCommunityAdminAssignment(
+            AppUserPrincipal principal,
+            UserRole requestedRole,
+            Boolean requestedCommunityAdmin,
+            boolean existingCommunityAdmin
+    ) {
+        if (requestedRole == UserRole.ADMIN || requestedRole == UserRole.HOA_ADMIN) {
+            return true;
+        }
+        if (requestedCommunityAdmin == null) {
+            return existingCommunityAdmin;
+        }
+        if (principal.getRole() == UserRole.ADMIN) {
+            return requestedCommunityAdmin;
+        }
+        if (!communityAccessService.isCurrentCommunityAdmin(principal)) {
+            throw new IllegalArgumentException("User cannot manage resident roles");
+        }
+        return requestedCommunityAdmin;
+    }
+
+    private CommunityMembershipResponse toCommunityMembershipResponse(ResidentCommunityMembershipEntity membership, boolean active) {
+        return new CommunityMembershipResponse(
+                membership.getCommunity().getId(),
+                membership.getCommunity().getSlug(),
+                membership.getCommunity().getName(),
+                active,
+                membership.isCommunityAdmin()
+        );
     }
 }

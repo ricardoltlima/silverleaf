@@ -16,6 +16,7 @@ public interface FeedPostLikeRepository extends JpaRepository<FeedPostLikeEntity
     List<FeedPostLikeEntity> findByPostIdInAndUserId(List<Long> postIds, Long userId);
 
     void deleteByPostIdAndUserId(Long postId, Long userId);
+    void deleteByPostId(Long postId);
 
     @Query("""
             select l.post.id as postId, count(l) as totalCount

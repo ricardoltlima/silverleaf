@@ -8,6 +8,18 @@ export type CurrentUser = {
   fullName: string;
   role: UserRole;
   photoUrl: string | null;
+  activeCommunityId: number | null;
+  activeCommunitySlug: string | null;
+  activeCommunityName: string | null;
+  communityAdmin: boolean;
+};
+
+export type CommunityMembership = {
+  communityId: number;
+  communitySlug: string;
+  communityName: string;
+  active: boolean;
+  communityAdmin: boolean;
 };
 
 export type MyProfile = {
@@ -25,8 +37,6 @@ export type MyProfile = {
   serviceContactEmail: string | null;
   serviceBusinessUrl: string | null;
   serviceHours: string | null;
-  serviceArea: string | null;
-  serviceVisibility: "PUBLIC" | "GROUPS";
 };
 
 export type UpdateMyProfilePayload = {
@@ -42,8 +52,8 @@ export type UpdateMyProfilePayload = {
   serviceContactEmail: string | null;
   serviceBusinessUrl: string | null;
   serviceHours: string | null;
-  serviceArea: string | null;
-  serviceVisibility: "PUBLIC" | "GROUPS";
+  serviceArea?: string | null;
+  serviceVisibility?: "PUBLIC" | "GROUPS";
 };
 
 export type MyHousehold = {
@@ -55,6 +65,10 @@ export type MyHousehold = {
 
 export function fetchCurrentUser() {
   return apiClient<CurrentUser>("/api/v1/me");
+}
+
+export function fetchMyCommunities() {
+  return apiClient<CommunityMembership[]>("/api/v1/me/communities");
 }
 
 export function fetchMyProfile() {

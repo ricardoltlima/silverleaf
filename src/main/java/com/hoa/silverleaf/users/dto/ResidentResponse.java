@@ -7,6 +7,7 @@ public record ResidentResponse(
         String email,
         String fullName,
         UserRole role,
-        boolean enabled
+        boolean enabled,
+        boolean communityAdmin
 ) {
 }

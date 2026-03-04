@@ -1,5 +1,6 @@
 package com.hoa.silverleaf.board;
 
+import com.hoa.silverleaf.community.CommunityEntity;
 import com.hoa.silverleaf.users.UserEntity;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -12,6 +13,10 @@ public class BroadcastEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "community_id", nullable = false)
+    private CommunityEntity community;
 
     @Column(nullable = false, length = 180)
     private String title;
@@ -28,6 +33,8 @@ public class BroadcastEntity {
     private Instant createdAt;
 
     public Long getId() { return id; }
+    public CommunityEntity getCommunity() { return community; }
+    public void setCommunity(CommunityEntity community) { this.community = community; }
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
     public String getBodyText() { return bodyText; }

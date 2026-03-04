@@ -4,6 +4,8 @@ import com.hoa.silverleaf.auth.dto.AuthRequest;
 import com.hoa.silverleaf.auth.dto.AuthResponse;
 import com.hoa.silverleaf.auth.dto.RefreshRequest;
 import com.hoa.silverleaf.auth.dto.RegisterRequest;
+import com.hoa.silverleaf.auth.dto.SwitchCommunityRequest;
+import com.hoa.silverleaf.security.AppUserPrincipal;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -43,5 +45,14 @@ public class AuthController {
     public AuthResponse refresh(@Valid @RequestBody RefreshRequest request) {
         log.info("Refresh token request received");
         return authService.refresh(request);
+    }
+
+    @PostMapping("/switch-community")
+    public AuthResponse switchCommunity(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal AppUserPrincipal principal,
+            @Valid @RequestBody SwitchCommunityRequest request
+    ) {
+        log.info("Switch community request received userId={} communityId={}", principal.getId(), request.communityId());
+        return authService.switchCommunity(principal, request);
     }
 }

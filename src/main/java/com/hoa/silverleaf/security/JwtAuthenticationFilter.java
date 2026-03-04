@@ -60,6 +60,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     filterChain.doFilter(request, response);
                     return;
                 }
+                Long activeCommunityId = claims.get("activeCommunityId", Long.class);
+                String activeCommunitySlug = claims.get("activeCommunitySlug", String.class);
+                String activeCommunityName = claims.get("activeCommunityName", String.class);
+                if (userDetails instanceof AppUserPrincipal principal) {
+                    userDetails = new AppUserPrincipal(principal, activeCommunityId, activeCommunitySlug, activeCommunityName);
+                }
                 var authToken = new UsernamePasswordAuthenticationToken(
                         userDetails,
                         null,
