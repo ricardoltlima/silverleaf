@@ -15,7 +15,7 @@ public class OpenApiConfig {
     public OpenAPI appOpenApi() {
         final String schemeName = "bearerAuth";
         return new OpenAPI()
-                .info(new Info().title("Silverleaf API").version("v1"))
+                .info(new Info().title("HOA Platform API").version("v1"))
                 .addSecurityItem(new SecurityRequirement().addList(schemeName))
                 .components(new Components()
                         .addSecuritySchemes(schemeName, new SecurityScheme()

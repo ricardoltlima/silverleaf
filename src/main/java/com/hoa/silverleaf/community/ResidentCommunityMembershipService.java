@@ -24,7 +24,8 @@ public class ResidentCommunityMembershipService {
 
     @Transactional
     public void ensureDefaultMembership(UserEntity resident) {
-        activateMembership(resident, communityService.requireDefaultCommunity());
+        communityService.findFirstActiveCommunity()
+                .ifPresent(community -> activateMembership(resident, community));
     }
 
     @Transactional(readOnly = true)

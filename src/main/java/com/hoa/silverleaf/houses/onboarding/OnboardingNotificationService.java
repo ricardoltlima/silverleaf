@@ -52,9 +52,9 @@ public class OnboardingNotificationService {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(onboardingProperties.getNotification().getFromEmail());
         message.setTo(destinationEmail);
-        message.setSubject("Silverleaf Reserve - Your resident invitation");
+        message.setSubject("Community Access - Your resident invitation");
         message.setText("Hello " + fullName + ",\n\n"
-                + "You have been invited to access Silverleaf Reserve for:\n"
+                + "You have been invited to access your community for:\n"
                 + houseAddress + "\n\n"
                 + "Open this link to continue:\n"
                 + inviteUrl);
@@ -75,7 +75,7 @@ public class OnboardingNotificationService {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(onboardingProperties.getNotification().getFromEmail());
         message.setTo(destinationEmail);
-        message.setSubject("Silverleaf Reserve - Verify your contact");
+        message.setSubject("Community Access - Verify your contact");
         message.setText("Please verify your contact to continue onboarding:\n" + verifyUrl);
         log.debug("Dispatching verification email via configured SMTP provider");
         mailSender.send(message);

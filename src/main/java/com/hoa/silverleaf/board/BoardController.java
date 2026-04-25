@@ -1,14 +1,17 @@
 package com.hoa.silverleaf.board;
 
 import com.hoa.silverleaf.board.dto.BroadcastResponse;
+import com.hoa.silverleaf.board.dto.BroadcastPageResponse;
 import com.hoa.silverleaf.board.dto.CreateBroadcastRequest;
 import com.hoa.silverleaf.board.dto.CreateNewsRequest;
 import com.hoa.silverleaf.board.dto.CreatePollRequest;
 import com.hoa.silverleaf.board.dto.CreateViolationRequest;
+import com.hoa.silverleaf.board.dto.NewsPageResponse;
 import com.hoa.silverleaf.board.dto.NewsResponse;
 import com.hoa.silverleaf.board.dto.PollResponse;
 import com.hoa.silverleaf.board.dto.UpdateNewsRequest;
 import com.hoa.silverleaf.board.dto.UpdateViolationStatusRequest;
+import com.hoa.silverleaf.board.dto.ViolationPageResponse;
 import com.hoa.silverleaf.board.dto.ViolationResponse;
 import com.hoa.silverleaf.board.dto.VotePollRequest;
 import com.hoa.silverleaf.security.AppUserPrincipal;
@@ -25,6 +28,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -42,8 +46,12 @@ public class BoardController {
     }
 
     @GetMapping("/news")
-    public List<NewsResponse> listNews(@AuthenticationPrincipal AppUserPrincipal principal) {
-        return boardService.listNews(principal);
+    public NewsPageResponse listNews(
+            @AuthenticationPrincipal AppUserPrincipal principal,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "20") int limit
+    ) {
+        return boardService.listNews(principal, cursor, limit);
     }
 
     @PostMapping("/board/news")
@@ -77,8 +85,12 @@ public class BoardController {
     }
 
     @GetMapping("/broadcasts")
-    public List<BroadcastResponse> listBroadcasts(@AuthenticationPrincipal AppUserPrincipal principal) {
-        return boardService.listBroadcasts(principal);
+    public BroadcastPageResponse listBroadcasts(
+            @AuthenticationPrincipal AppUserPrincipal principal,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "20") int limit
+    ) {
+        return boardService.listBroadcasts(principal, cursor, limit);
     }
 
     @PostMapping("/board/broadcasts")
@@ -135,8 +147,12 @@ public class BoardController {
 
     @GetMapping("/board/violations")
     @PreAuthorize("@communityAccessService.isCurrentCommunityAdmin(authentication.principal)")
-    public List<ViolationResponse> listAllViolations(@AuthenticationPrincipal AppUserPrincipal principal) {
-        return boardService.listAllViolations(principal);
+    public ViolationPageResponse listAllViolations(
+            @AuthenticationPrincipal AppUserPrincipal principal,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "20") int limit
+    ) {
+        return boardService.listAllViolations(principal, cursor, limit);
     }
 
     @PatchMapping("/board/violations/{violationId}/status")

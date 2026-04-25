@@ -102,7 +102,7 @@ function FormSectionCard({
           <p className="whitespace-pre-line text-sm leading-7 text-slate-700">
             {renderHighlightedText(
               `All Homeowners are required to be current on dues and compliant with the rules and regulations.
-$250.00 Rental Check and a $250 Deposit Check must accompany this application. Please write 2 separate Checks. All Checks must be made out to Silverleaf Reserve Homeowners Association, Inc.`,
+$250.00 Rental Check and a $250 Deposit Check must accompany this application. Please write 2 separate Checks. All Checks must be made out to Community Homeowners Association, Inc.`,
               query
             )}
           </p>
@@ -185,7 +185,7 @@ $250.00 Rental Check and a $250 Deposit Check must accompany this application. P
 
           <p className="whitespace-pre-line text-sm leading-7 text-slate-700">
             {renderHighlightedText(
-              `(initial here) I have read, signed and fully understand the attached rules and agree to abide by them during the rental period. I understand that I will be responsible for all damages to the clubhouse during the rental period. Silverleaf HOA and HomeRiver Group are not responsible for any articles that may be left behind or thrown away as a result of the renter not removing them when they depart.
+              `(initial here) I have read, signed and fully understand the attached rules and agree to abide by them during the rental period. I understand that I will be responsible for all damages to the clubhouse during the rental period. Community HOA and HomeRiver Group are not responsible for any articles that may be left behind or thrown away as a result of the renter not removing them when they depart.
 
 Signature
 Date
@@ -269,7 +269,7 @@ export function ClubhouseFormModal({ onClose }: ClubhouseFormModalProps) {
           </style>
         </head>
         <body>
-          <h1>Silverleaf Reserve HOA</h1>
+          <h1>Community HOA</h1>
           <h2>Clubhouse Reservation Application and Agreement</h2>
           <div class="intro">${CLUBHOUSE_FORM_INTRO}</div>
           <div class="section">
@@ -278,7 +278,7 @@ export function ClubhouseFormModal({ onClose }: ClubhouseFormModalProps) {
             </div>
             <div class="section-body">
               <div style="white-space:pre-line; line-height:1.7; color:#334155; font-size:13px; margin-bottom:16px;">All Homeowners are required to be current on dues and compliant with the rules and regulations.
-$250.00 Rental Check and a $250 Deposit Check must accompany this application. Please write 2 separate Checks. All Checks must be made out to Silverleaf Reserve Homeowners Association, Inc.</div>
+$250.00 Rental Check and a $250 Deposit Check must accompany this application. Please write 2 separate Checks. All Checks must be made out to Community Homeowners Association, Inc.</div>
               <div class="grid">
                 ${renderField("Date of Application", form.applicationDate)}
                 ${renderField("Name", form.name)}
@@ -314,7 +314,7 @@ $250.00 Rental Check and a $250 Deposit Check must accompany this application. P
       >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-[linear-gradient(135deg,_#f7fbf4_0%,_#eef6f0_45%,_#f8fafc_100%)] px-5 py-3">
           <div className="min-w-[240px]">
-            <p className="text-xs uppercase tracking-[0.25em] text-leaf-700">Silverleaf Reserve HOA</p>
+            <p className="text-xs uppercase tracking-[0.25em] text-leaf-700">Community HOA</p>
             <h3 className="text-lg font-semibold text-slate-900">Clubhouse Form</h3>
           </div>
           <div className="min-w-[300px] flex-1">
@@ -396,3 +396,4 @@ $250.00 Rental Check and a $250 Deposit Check must accompany this application. P
     </div>
   );
 }
+

@@ -6,7 +6,6 @@ import com.hoa.silverleaf.community.CommunityEntity;
 import com.hoa.silverleaf.community.CommunityRepository;
 import com.hoa.silverleaf.community.ResidentCommunityMembershipRepository;
 import com.hoa.silverleaf.community.ResidentCommunityMembershipService;
-import com.hoa.silverleaf.community.CommunityService;
 import com.hoa.silverleaf.houses.HouseEntity;
 import com.hoa.silverleaf.houses.HouseRepository;
 import com.hoa.silverleaf.houses.HouseResidentEntity;
@@ -15,6 +14,7 @@ import com.hoa.silverleaf.houses.HouseStatus;
 import com.hoa.silverleaf.users.UserEntity;
 import com.hoa.silverleaf.users.UserRepository;
 import com.hoa.silverleaf.users.UserRole;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -39,6 +39,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 class ApiIntegrationTest {
+
+    private static final String DEFAULT_TEST_COMMUNITY_SLUG = "test-community";
+    private static final String DEFAULT_TEST_COMMUNITY_NAME = "Test Community";
 
     @Autowired
     private MockMvc mockMvc;
@@ -66,6 +69,13 @@ class ApiIntegrationTest {
 
     @Autowired
     private ResidentCommunityMembershipService residentCommunityMembershipService;
+
+    @BeforeEach
+    void ensureActiveCommunityExists() {
+        if (communityRepository.findFirstByActiveTrueOrderByCreatedAtAsc().isEmpty()) {
+            createCommunity(DEFAULT_TEST_COMMUNITY_SLUG, DEFAULT_TEST_COMMUNITY_NAME);
+        }
+    }
 
     @Test
     void residentsListWithoutTokenReturnsUnauthorized() throws Exception {
@@ -259,7 +269,7 @@ class ApiIntegrationTest {
         createUser("admin.community@example.com", "Passw0rd!", UserRole.HOA_ADMIN, true);
         String adminToken = loginAndGetAccessToken("admin.community@example.com", "Passw0rd!");
 
-        assertThat(communityRepository.findBySlug(CommunityService.DEFAULT_COMMUNITY_SLUG)).isPresent();
+        assertThat(communityRepository.findBySlug(firstActiveCommunity().getSlug())).isPresent();
 
         MvcResult createHouseResult = mockMvc.perform(post("/api/v1/houses")
                         .header("Authorization", "Bearer " + adminToken)
@@ -277,8 +287,8 @@ class ApiIntegrationTest {
         HouseEntity savedHouse = houseRepository.findById(houseId).orElseThrow();
 
         assertThat(savedHouse.getCommunity()).isNotNull();
-        assertThat(savedHouse.getCommunity().getSlug()).isEqualTo(CommunityService.DEFAULT_COMMUNITY_SLUG);
-        assertThat(savedHouse.getCommunity().getName()).isEqualTo("Silverleaf Reserve");
+        assertThat(savedHouse.getCommunity().getSlug()).isEqualTo(firstActiveCommunity().getSlug());
+        assertThat(savedHouse.getCommunity().getName()).isEqualTo(firstActiveCommunity().getName());
     }
 
     @Test
@@ -301,14 +311,14 @@ class ApiIntegrationTest {
                 .isPresent()
                 .get()
                 .extracting(membership -> membership.getCommunity().getSlug())
-                .isEqualTo(CommunityService.DEFAULT_COMMUNITY_SLUG);
+                .isEqualTo(firstActiveCommunity().getSlug());
     }
 
     @Test
     void residentWithCommunityAdminMembershipCanAccessCommunityAdminEndpoints() throws Exception {
         createUser("community.admin.member@example.com", "Passw0rd!", UserRole.RESIDENT, true);
         UserEntity resident = userRepository.findByEmailIgnoreCase("community.admin.member@example.com").orElseThrow();
-        CommunityEntity defaultCommunity = communityRepository.findBySlug(CommunityService.DEFAULT_COMMUNITY_SLUG).orElseThrow();
+        CommunityEntity defaultCommunity = firstActiveCommunity();
         residentCommunityMembershipService.syncCommunityAdmin(resident, defaultCommunity, true);
 
         String token = loginAndGetAccessToken("community.admin.member@example.com", "Passw0rd!");
@@ -334,7 +344,7 @@ class ApiIntegrationTest {
 
         UserEntity promoter = userRepository.findByEmailIgnoreCase("promoter@example.com").orElseThrow();
         UserEntity promoted = userRepository.findByEmailIgnoreCase("promoted@example.com").orElseThrow();
-        CommunityEntity defaultCommunity = communityRepository.findBySlug(CommunityService.DEFAULT_COMMUNITY_SLUG).orElseThrow();
+        CommunityEntity defaultCommunity = firstActiveCommunity();
         residentCommunityMembershipService.syncCommunityAdmin(promoter, defaultCommunity, true);
 
         String promoterToken = loginAndGetAccessToken("promoter@example.com", "Passw0rd!");
@@ -589,7 +599,7 @@ class ApiIntegrationTest {
         createUser("feed.author@example.com", "Passw0rd!", UserRole.RESIDENT, true);
 
         UserEntity adminUser = userRepository.findByEmailIgnoreCase("feed.admin@example.com").orElseThrow();
-        CommunityEntity defaultCommunity = communityRepository.findBySlug(CommunityService.DEFAULT_COMMUNITY_SLUG).orElseThrow();
+        CommunityEntity defaultCommunity = firstActiveCommunity();
         residentCommunityMembershipService.syncCommunityAdmin(adminUser, defaultCommunity, true);
 
         String adminToken = loginAndGetAccessToken("feed.admin@example.com", "Passw0rd!");
@@ -699,7 +709,10 @@ class ApiIntegrationTest {
                                   "communityId": %d,
                                   "refreshToken": "%s"
                                 }
-                                """.formatted(communityRepository.findBySlug(CommunityService.DEFAULT_COMMUNITY_SLUG).orElseThrow().getId(), refreshToken)))
+                                """.formatted(
+                                        firstActiveCommunity().getId(),
+                                        refreshToken
+                                )))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Invalid refresh token"));
 
@@ -784,7 +797,7 @@ class ApiIntegrationTest {
                 .andExpect(jsonPath("$.length()").value(2))
                 .andExpect(jsonPath("$[0].communitySlug").value("pine-ridge"))
                 .andExpect(jsonPath("$[0].active").value(true))
-                .andExpect(jsonPath("$[1].communitySlug").value("silverleaf-reserve"))
+                .andExpect(jsonPath("$[1].communitySlug").value(firstActiveCommunity().getSlug()))
                 .andExpect(jsonPath("$[1].active").value(false));
     }
 
@@ -1071,7 +1084,7 @@ class ApiIntegrationTest {
         String adminToken = loginAndGetAccessToken("hoa.invites@example.com", "Passw0rd!");
 
         HouseEntity invitedHouse = new HouseEntity();
-        invitedHouse.setCommunity(communityRepository.findBySlug(CommunityService.DEFAULT_COMMUNITY_SLUG).orElseThrow());
+        invitedHouse.setCommunity(firstActiveCommunity());
         invitedHouse.setAddress("789 Magnolia Court");
         invitedHouse.setQrToken("invite-house-789");
         invitedHouse.setStatus(HouseStatus.UNKNOWN);
@@ -1227,7 +1240,7 @@ class ApiIntegrationTest {
     void residentCanUpdateProfileAndManageHousehold() throws Exception {
         createUser("resident.house@example.com", "Passw0rd!", UserRole.RESIDENT, true);
         HouseEntity house = new HouseEntity();
-        house.setCommunity(communityRepository.findBySlug(CommunityService.DEFAULT_COMMUNITY_SLUG).orElseThrow());
+        house.setCommunity(firstActiveCommunity());
         house.setAddress("555 Cypress Lane");
         house.setQrToken("house555");
         house.setStatus(HouseStatus.OCCUPIED);
@@ -1510,12 +1523,14 @@ class ApiIntegrationTest {
         mockMvc.perform(get("/api/v1/news")
                         .header("Authorization", "Bearer " + otherAdminToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isEmpty());
+                .andExpect(jsonPath("$.items").isEmpty())
+                .andExpect(jsonPath("$.nextCursor").doesNotExist());
 
         mockMvc.perform(get("/api/v1/broadcasts")
                         .header("Authorization", "Bearer " + otherAdminToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isEmpty());
+                .andExpect(jsonPath("$.items").isEmpty())
+                .andExpect(jsonPath("$.nextCursor").doesNotExist());
 
         mockMvc.perform(get("/api/v1/polls")
                         .header("Authorization", "Bearer " + otherAdminToken))
@@ -1525,12 +1540,14 @@ class ApiIntegrationTest {
         mockMvc.perform(get("/api/v1/board/violations")
                         .header("Authorization", "Bearer " + otherAdminToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isEmpty());
+                .andExpect(jsonPath("$.items").isEmpty())
+                .andExpect(jsonPath("$.nextCursor").doesNotExist());
 
         mockMvc.perform(get("/api/v1/garage-sales")
                         .header("Authorization", "Bearer " + otherAdminToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isEmpty());
+                .andExpect(jsonPath("$.items").isEmpty())
+                .andExpect(jsonPath("$.nextCursor").doesNotExist());
     }
 
     @Test
@@ -1597,7 +1614,8 @@ class ApiIntegrationTest {
         mockMvc.perform(get("/api/v1/garage-sales")
                         .header("Authorization", "Bearer " + ownerToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isEmpty());
+                .andExpect(jsonPath("$.items").isEmpty())
+                .andExpect(jsonPath("$.nextCursor").doesNotExist());
     }
 
     @Test
@@ -1682,5 +1700,9 @@ class ApiIntegrationTest {
         community.setSlug(slug);
         community.setName(name);
         return communityRepository.save(community);
+    }
+
+    private CommunityEntity firstActiveCommunity() {
+        return communityRepository.findFirstByActiveTrueOrderByCreatedAtAsc().orElseThrow();
     }
 }

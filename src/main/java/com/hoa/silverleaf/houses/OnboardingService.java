@@ -121,8 +121,8 @@ public class OnboardingService {
                 saved.getContactValue(),
                 saved.getVerificationToken()
         );
-        log.info("Google onboarding started sessionToken={} houseId={} email={}",
-                saved.getSessionToken(), house.getId(), saved.getContactValue());
+        log.info("Google onboarding started sessionToken={} houseId={}",
+                saved.getSessionToken(), house.getId());
         return toResponse(saved);
     }
 
@@ -148,8 +148,8 @@ public class OnboardingService {
                 saved.getContactValue(),
                 saved.getVerificationToken()
         );
-        log.info("Contact verification requested sessionToken={} type={} destination={}",
-                saved.getSessionToken(), saved.getContactType(), saved.getContactValue());
+        log.info("Contact verification requested sessionToken={} type={} destination=masked",
+                saved.getSessionToken(), saved.getContactType());
         return toResponse(saved);
     }
 
@@ -214,11 +214,11 @@ public class OnboardingService {
 
         String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
         if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
-            log.warn("Local onboarding register rejected because email already exists houseId={} email={}", houseId, normalizedEmail);
+            log.warn("Local onboarding register rejected because email already exists houseId={} email=masked", houseId);
             throw new IllegalArgumentException("Email already registered");
         }
 
-        log.info("Local onboarding register requested houseId={} email={}", houseId, normalizedEmail);
+        log.info("Local onboarding register requested houseId={}", houseId);
         AuthResponse authResponse = authService.register(new RegisterRequest(fullName.trim(), normalizedEmail, password));
         UserEntity user = userRepository.findByEmailIgnoreCase(normalizedEmail)
                 .orElseThrow(() -> new NotFoundException("User not found"));
@@ -260,7 +260,7 @@ public class OnboardingService {
         HouseEntity house = session.getHouse();
         String normalizedEmail = identity.email().trim().toLowerCase(Locale.ROOT);
         if (houseResidentRepository.existsByHouseIdAndEmailIgnoreCase(house.getId(), normalizedEmail)) {
-            log.warn("Duplicate resident claim blocked houseId={} email={}", house.getId(), normalizedEmail);
+            log.warn("Duplicate resident claim blocked houseId={} email=masked", house.getId());
             throw new IllegalArgumentException("Resident already added to this address");
         }
 
@@ -289,8 +289,8 @@ public class OnboardingService {
         session.setCompletedAt(Instant.now());
         onboardingSessionRepository.save(session);
 
-        log.info("Onboarding completed sessionToken={} houseId={} provider={} residentEmail={}",
-                session.getSessionToken(), house.getId(), identity.provider(), normalizedEmail);
+        log.info("Onboarding completed sessionToken={} houseId={} provider={} residentUserId={}",
+                session.getSessionToken(), house.getId(), identity.provider(), residentUser.getId());
         return houseService.getHouseByQrToken(house.getQrToken());
     }
 
@@ -364,7 +364,7 @@ public class OnboardingService {
             if (!existingUser.getFullName().equals(fullName.trim())) {
                 existingUser.setFullName(fullName.trim());
                 existingUser = userRepository.save(existingUser);
-                log.info("Synced app_user fullName from house resident email={}", normalizedEmail);
+                log.info("Synced house resident profile userId={}", existingUser.getId());
             }
             return existingUser;
         }).orElseGet(() -> {
@@ -376,7 +376,7 @@ public class OnboardingService {
             user.setRole(UserRole.RESIDENT);
             user.setEnabled(true);
             UserEntity saved = userRepository.save(user);
-            log.info("Created app_user from house resident email={}", normalizedEmail);
+            log.info("Created app_user from house resident userId={}", saved.getId());
             return saved;
         });
     }

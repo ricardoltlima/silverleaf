@@ -1,11 +1,15 @@
 spring:
   application:
+    # TODO: rename for production multi-tenant deployment
     name: silverleaf-backend
   profiles:
     default: local
   datasource:
+    # TODO: rename for production multi-tenant deployment
     url: ${DB_URL:jdbc:postgresql://localhost:5433/silverleaf}
+    # TODO: rename for production multi-tenant deployment
     username: ${DB_USERNAME:silverleaf}
+    # TODO: rename for production multi-tenant deployment
     password: ${DB_PASSWORD:silverleaf}
   jpa:
     open-in-view: false
@@ -43,19 +47,20 @@ logging:
     com.hoa.silverleaf: INFO
 
 app:
+  allowed-origins: http://localhost:5173
   feed:
     upload-dir: ${FEED_UPLOAD_DIR:uploads}
   onboarding:
     verification-base-url: ${ONBOARDING_VERIFICATION_BASE_URL:http://localhost:8080/api/v1/public/onboarding/verify-web}
     local-login-enabled: ${ONBOARDING_LOCAL_LOGIN_ENABLED:false}
     notification:
-      from-email: ${ONBOARDING_FROM_EMAIL:no-reply@silverleaf.local}
+      from-email: ${ONBOARDING_FROM_EMAIL:no-reply@hoa-platform.local}
       email-enabled: ${ONBOARDING_EMAIL_ENABLED:false}
     google:
       client-id: ${GOOGLE_OAUTH_CLIENT_ID:}
   security:
     jwt:
-      issuer: silverleaf
+      issuer: hoa-platform
       secret: ${JWT_SECRET:change-me-change-me-change-me-change-me-change-me}
       access-token-minutes: 15
       refresh-token-days: 30

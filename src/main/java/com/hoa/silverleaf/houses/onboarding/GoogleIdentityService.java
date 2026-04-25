@@ -49,7 +49,7 @@ public class GoogleIdentityService {
                 throw new IllegalArgumentException("Google token missing required subject/email");
             }
 
-            log.info("Google identity verified sub={} email={}", sub, email);
+            log.info("Google identity verified");
             return new IdentityAssertion("google", sub, name, email);
         } catch (IllegalArgumentException ex) {
             throw ex;

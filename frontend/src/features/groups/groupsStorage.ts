@@ -1,4 +1,4 @@
-const LAST_SEEN_KEY = "silverleaf-group-last-seen";
+const LAST_SEEN_KEY = "app-group-last-seen";
 
 export type GroupLastSeen = Record<string, string>;
 
@@ -16,5 +16,6 @@ export function markGroupSeen(slug: string, timestampIso: string) {
   const current = getLastSeen();
   current[slug] = timestampIso;
   localStorage.setItem(LAST_SEEN_KEY, JSON.stringify(current));
-  window.dispatchEvent(new CustomEvent("silverleaf-group-seen-changed"));
+  window.dispatchEvent(new CustomEvent("app-group-seen-changed"));
 }
+

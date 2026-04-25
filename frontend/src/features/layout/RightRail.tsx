@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchNews, type NewsItem } from "@/features/board/boardApi";
+import { useCommunityConfig } from "@/hooks/useCommunityConfig";
 
-const WEATHER_UNIT_KEY = "silverleaf_weather_unit";
+const WEATHER_UNIT_KEY = "app_weather_unit";
 
 type WeatherState = {
   location: string;
@@ -52,6 +53,7 @@ function isVideoUrl(url: string): boolean {
 }
 
 export function RightRail() {
+  const communityConfigQuery = useCommunityConfig();
   const [weather, setWeather] = useState<WeatherState>(null);
   const [weatherError, setWeatherError] = useState<string>("");
   const [tempUnit, setTempUnit] = useState<"F" | "C">(() => {
@@ -67,6 +69,7 @@ export function RightRail() {
   });
 
   const topNews = useMemo(() => (newsQuery.data ?? []).slice(0, 6), [newsQuery.data]);
+  const communityName = communityConfigQuery.data?.name || "Community";
 
   useEffect(() => {
     localStorage.setItem(WEATHER_UNIT_KEY, tempUnit);
@@ -121,7 +124,7 @@ export function RightRail() {
   return (
     <aside className="hidden space-y-4 xl:block">
       <section className="card p-4">
-        <h3 className="mb-3 text-lg font-semibold text-slate-900">Silverleaf News</h3>
+        <h3 className="mb-3 text-lg font-semibold text-slate-900">{communityName} News</h3>
         {newsQuery.isLoading ? <p className="text-sm text-slate-500">Loading news...</p> : null}
         {newsQuery.isError ? <p className="text-sm text-rose-700">{(newsQuery.error as Error).message}</p> : null}
         <div className="space-y-3">
@@ -229,3 +232,4 @@ export function RightRail() {
     </aside>
   );
 }
+

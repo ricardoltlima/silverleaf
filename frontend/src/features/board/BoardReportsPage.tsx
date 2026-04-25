@@ -98,7 +98,7 @@ export function BoardReportsPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    window.dispatchEvent(new CustomEvent("silverleaf-open-messages", { detail: item.authorUserId }));
+                    window.dispatchEvent(new CustomEvent("app-open-messages", { detail: item.authorUserId }));
                   }}
                   className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
                 >
@@ -185,3 +185,4 @@ function ReportAuthorAvatar(props: { name: string; photoUrl: string | null }) {
 function displayBodyText(bodyText: string) {
   return bodyText.replace(/^\[\[reply:\d+]]\s*/, "");
 }
+

@@ -150,7 +150,7 @@ export function CommunityStandardsModal({ onClose }: CommunityStandardsModalProp
       >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-[linear-gradient(135deg,_#f7fbf4_0%,_#eef6f0_45%,_#f8fafc_100%)] px-5 py-3">
           <div className="min-w-[220px]">
-            <p className="text-xs uppercase tracking-[0.25em] text-leaf-700">Silverleaf Reserve HOA</p>
+            <p className="text-xs uppercase tracking-[0.25em] text-leaf-700">Community HOA</p>
             <h3 className="text-lg font-semibold text-slate-900">Community Standards</h3>
           </div>
           <div className="min-w-[300px] flex-1">
@@ -250,3 +250,4 @@ export function CommunityStandardsModal({ onClose }: CommunityStandardsModalProp
     </div>
   );
 }
+

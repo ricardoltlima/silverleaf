@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { acceptResidentInvitation, fetchPublicConfig, fetchPublicHouses, fetchResidentInvitation, login } from "@/features/auth/authApi";
 import { getRememberedLogin, setRememberedLogin } from "@/features/auth/loginStorage";
 import { setTokens, getAccessToken } from "@/lib/authStorage";
+import { useCommunityConfig } from "@/hooks/useCommunityConfig";
 import type { PublicHouse } from "@/features/auth/types";
 
 function findHouseByRemembered(houses: PublicHouse[], rememberedHouseId: number | null, rememberedAddress: string) {
@@ -19,6 +20,7 @@ export function LoginPage() {
   const [searchParams] = useSearchParams();
   const remembered = getRememberedLogin();
   const invitationToken = searchParams.get("invite")?.trim() || "";
+  const communityConfigQuery = useCommunityConfig();
 
   const [identifier, setIdentifier] = useState(remembered?.identifier ?? "");
   const [password, setPassword] = useState("myPassw0rd!");
@@ -94,6 +96,8 @@ export function LoginPage() {
   const hasInvitation = !!invitationQuery.data;
   const googleConfigured = !!configQuery.data?.googleClientId;
   const invitationResidentName = invitationQuery.data?.fullName?.trim() || "";
+  const communityName = communityConfigQuery.data?.name || "Community Platform";
+  const communityLogoUrl = communityConfigQuery.data?.logoUrl?.trim() || null;
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -128,9 +132,9 @@ export function LoginPage() {
       <div className="mx-auto grid min-h-[calc(100vh-4rem)] w-full max-w-6xl gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
         <section className="px-2 lg:px-8">
           <div className="mb-6 flex items-center gap-3">
-            <img src="/silverleaf-icon.svg" alt="Silverleaf" className="h-12 w-12 rounded-2xl shadow-sm" />
+            <img src={communityLogoUrl || "/app-icon.svg"} alt={communityName} className="h-12 w-12 rounded-2xl object-cover shadow-sm" />
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-leaf-700">Silverleaf Reserve</p>
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-leaf-700">{communityName}</p>
               <h1 className="text-4xl font-semibold tracking-tight text-slate-900 md:text-5xl">
                 Neighborhood access, tailored for residents.
               </h1>
@@ -284,3 +288,4 @@ export function LoginPage() {
     </main>
   );
 }
+

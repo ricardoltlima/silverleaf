@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { clearTokens, getActiveCommunity, getRefreshToken, setTokens } from "@/lib/authStorage";
+import { useCommunityConfig } from "@/hooks/useCommunityConfig";
 import { switchCommunity } from "@/features/auth/authApi";
 import { fetchReactionAlerts } from "@/features/alerts/alertsApi";
 import { RightRail } from "@/features/layout/RightRail";
@@ -74,20 +75,24 @@ export function AppShell() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
+  const communityConfigQuery = useCommunityConfig();
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [messagesTargetUserId, setMessagesTargetUserId] = useState<number | null>(null);
   const meQuery = useQuery({
     queryKey: ["me"],
-    queryFn: fetchCurrentUser
+    queryFn: fetchCurrentUser,
+    refetchOnWindowFocus: false
   });
   const householdQuery = useQuery({
     queryKey: ["my-household"],
     queryFn: fetchMyHousehold,
-    retry: false
+    retry: false,
+    refetchOnWindowFocus: false
   });
   const communitiesQuery = useQuery({
     queryKey: ["me", "communities"],
-    queryFn: fetchMyCommunities
+    queryFn: fetchMyCommunities,
+    refetchOnWindowFocus: false
   });
   const [hoaExpanded, setHoaExpanded] = useState(false);
   const [openDoc, setOpenDoc] = useState<null | "community-standards" | "clubhouse-form">(null);
@@ -96,22 +101,25 @@ export function AppShell() {
   const unreadCountQuery = useQuery({
     queryKey: ["messages", "unread-count"],
     queryFn: fetchUnreadCount,
-    refetchInterval: 5000
+    refetchInterval: 15000,
+    refetchOnWindowFocus: false
   });
   const groupAlertsQuery = useQuery({
     queryKey: ["feed", "group", "alerts", "badge"],
     queryFn: () => fetchFeed(100, "GROUP"),
-    refetchInterval: 5000
+    refetchInterval: 20000,
+    refetchOnWindowFocus: false
   });
   const groupRequestsQuery = useQuery({
     queryKey: ["groups", "requests", "badge"],
     queryFn: fetchGroupRequests,
-    refetchInterval: 5000
+    refetchOnWindowFocus: false
   });
   const reactionAlertsQuery = useQuery({
     queryKey: ["alerts", "reactions", "badge"],
     queryFn: fetchReactionAlerts,
-    refetchInterval: 5000
+    refetchInterval: 20000,
+    refetchOnWindowFocus: false
   });
   const isAdmin = canManageCommunity(meQuery.data);
   const isSystem = isSystemAdmin(meQuery.data?.role);
@@ -119,13 +127,14 @@ export function AppShell() {
     queryKey: ["violations", "alerts", "badge"],
     queryFn: fetchAllViolations,
     enabled: isAdmin,
-    refetchInterval: 5000
+    refetchOnWindowFocus: false
   });
   const reportsQuery = useQuery({
     queryKey: ["feed", "reports", "badge"],
     queryFn: fetchReportedPosts,
     enabled: isAdmin,
-    refetchInterval: 5000
+    refetchInterval: 30000,
+    refetchOnWindowFocus: false
   });
   const [groupSeenVersion, setGroupSeenVersion] = useState(0);
   const [groupRequestsSeenVersion, setGroupRequestsSeenVersion] = useState(0);
@@ -134,33 +143,33 @@ export function AppShell() {
 
   useEffect(() => {
     const onSeenChange = () => setGroupSeenVersion((current) => current + 1);
-    window.addEventListener("silverleaf-group-seen-changed", onSeenChange);
+    window.addEventListener("app-group-seen-changed", onSeenChange);
     return () => {
-      window.removeEventListener("silverleaf-group-seen-changed", onSeenChange);
+      window.removeEventListener("app-group-seen-changed", onSeenChange);
     };
   }, []);
 
   useEffect(() => {
     const onSeenChange = () => setViolationsSeenVersion((current) => current + 1);
-    window.addEventListener("silverleaf-violations-seen-changed", onSeenChange);
+    window.addEventListener("app-violations-seen-changed", onSeenChange);
     return () => {
-      window.removeEventListener("silverleaf-violations-seen-changed", onSeenChange);
+      window.removeEventListener("app-violations-seen-changed", onSeenChange);
     };
   }, []);
 
   useEffect(() => {
     const onSeenChange = () => setGroupRequestsSeenVersion((current) => current + 1);
-    window.addEventListener("silverleaf-group-requests-seen-changed", onSeenChange);
+    window.addEventListener("app-group-requests-seen-changed", onSeenChange);
     return () => {
-      window.removeEventListener("silverleaf-group-requests-seen-changed", onSeenChange);
+      window.removeEventListener("app-group-requests-seen-changed", onSeenChange);
     };
   }, []);
 
   useEffect(() => {
     const onSeenChange = () => setReportsSeenVersion((current) => current + 1);
-    window.addEventListener("silverleaf-reports-seen-changed", onSeenChange);
+    window.addEventListener("app-reports-seen-changed", onSeenChange);
     return () => {
-      window.removeEventListener("silverleaf-reports-seen-changed", onSeenChange);
+      window.removeEventListener("app-reports-seen-changed", onSeenChange);
     };
   }, []);
 
@@ -170,9 +179,9 @@ export function AppShell() {
       setMessagesTargetUserId(customEvent.detail ?? null);
       setMessagesOpen(true);
     };
-    window.addEventListener("silverleaf-open-messages", onOpenMessages as EventListener);
+    window.addEventListener("app-open-messages", onOpenMessages as EventListener);
     return () => {
-      window.removeEventListener("silverleaf-open-messages", onOpenMessages as EventListener);
+      window.removeEventListener("app-open-messages", onOpenMessages as EventListener);
     };
   }, []);
 
@@ -226,9 +235,18 @@ export function AppShell() {
   useEffect(() => {
     if (meQuery.data?.photoUrl !== undefined) {
       setProfilePhoto(meQuery.data.photoUrl);
-      window.dispatchEvent(new CustomEvent("silverleaf-profile-photo-changed", { detail: meQuery.data.photoUrl || null }));
+      window.dispatchEvent(new CustomEvent("app-profile-photo-changed", { detail: meQuery.data.photoUrl || null }));
     }
   }, [meQuery.data?.photoUrl]);
+
+  useEffect(() => {
+    const primaryColor = communityConfigQuery.data?.primaryColor?.trim();
+    if (primaryColor) {
+      document.documentElement.style.setProperty("--color-primary", primaryColor);
+      return;
+    }
+    document.documentElement.style.removeProperty("--color-primary");
+  }, [communityConfigQuery.data?.primaryColor]);
 
   const uploadPhotoMutation = useMutation({
     mutationFn: uploadMyProfilePhoto,
@@ -236,7 +254,7 @@ export function AppShell() {
       queryClient.setQueryData<CurrentUser>(["me"], updatedMe);
       setProfilePhoto(updatedMe.photoUrl);
       window.dispatchEvent(
-        new CustomEvent("silverleaf-profile-photo-changed", {
+        new CustomEvent("app-profile-photo-changed", {
           detail: updatedMe.photoUrl || null
         })
       );
@@ -279,7 +297,7 @@ export function AppShell() {
       queryClient.setQueryData(["my-household"], nextHousehold);
       setProfilePhoto(nextMe.photoUrl);
       window.dispatchEvent(
-        new CustomEvent("silverleaf-profile-photo-changed", {
+        new CustomEvent("app-profile-photo-changed", {
           detail: nextMe.photoUrl || null
         })
       );
@@ -318,7 +336,7 @@ export function AppShell() {
   const saveProfilePhoto = (value: string) => {
     setProfilePhoto(value);
     setPhotoDraft(null);
-    window.dispatchEvent(new CustomEvent("silverleaf-profile-photo-changed", { detail: value }));
+    window.dispatchEvent(new CustomEvent("app-profile-photo-changed", { detail: value }));
     const file = dataUrlToFile(value, "profile.jpg");
     uploadPhotoMutation.mutate(file);
   };
@@ -326,6 +344,8 @@ export function AppShell() {
   const closeDocModal = () => setOpenDoc(null);
   const activeMembership = communitiesQuery.data?.find((membership) => membership.active);
   const activeCommunityName = activeMembership?.communityName ?? meQuery.data?.activeCommunityName ?? null;
+  const configuredCommunityName = communityConfigQuery.data?.name || activeCommunityName || "Community Platform";
+  const configuredCommunityLogoUrl = communityConfigQuery.data?.logoUrl?.trim() || null;
   const activeScopeLabel = isSystem
     ? "System Admin"
     : isAdmin
@@ -337,7 +357,18 @@ export function AppShell() {
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white">
         <div className="mx-auto flex w-full max-w-7xl justify-center px-4 py-3">
           <div className="flex items-center gap-6">
-            <img src="/silverleaf-icon.svg" alt="Silverleaf" className="h-10 w-10 rounded-xl shadow-sm" />
+            <div className="flex items-center gap-3">
+              {configuredCommunityLogoUrl ? (
+                <img src={configuredCommunityLogoUrl} alt={configuredCommunityName} className="h-10 w-10 rounded-xl object-cover shadow-sm" />
+              ) : (
+                <>
+                  <img src="/app-icon.svg" alt={configuredCommunityName} className="h-10 w-10 rounded-xl shadow-sm" />
+                  <span className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-700">
+                    {configuredCommunityName}
+                  </span>
+                </>
+              )}
+            </div>
             <nav className="flex items-center gap-1">
             {links.map((link) => (
               link.type === "messages" ? (
@@ -408,7 +439,7 @@ export function AppShell() {
                 />
               </label>
               <h3 className="text-base font-semibold text-slate-900">
-                {meQuery.data?.fullName || "Silverleaf Resident"}
+                {meQuery.data?.fullName || "Community Resident"}
               </h3>
               <p className="text-xs text-slate-500">
                 {householdQuery.data?.houseAddress || "Address not set"}
@@ -610,3 +641,5 @@ export function AppShell() {
     </div>
   );
 }
+
+

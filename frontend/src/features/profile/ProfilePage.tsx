@@ -88,7 +88,7 @@ export function ProfilePage() {
       queryClient.invalidateQueries({ queryKey: ["me-profile"] });
       queryClient.invalidateQueries({ queryKey: ["feed", "services"] });
       window.dispatchEvent(
-        new CustomEvent("silverleaf-profile-photo-changed", {
+        new CustomEvent("app-profile-photo-changed", {
           detail: updatedMe.photoUrl || null
         })
       );
@@ -171,9 +171,9 @@ export function ProfilePage() {
       const customEvent = event as CustomEvent<AppTheme>;
       setTheme(customEvent.detail);
     };
-    window.addEventListener("silverleaf-theme-changed", onThemeChanged as EventListener);
+    window.addEventListener("app-theme-changed", onThemeChanged as EventListener);
     return () => {
-      window.removeEventListener("silverleaf-theme-changed", onThemeChanged as EventListener);
+      window.removeEventListener("app-theme-changed", onThemeChanged as EventListener);
     };
   }, []);
 
@@ -429,3 +429,4 @@ export function ProfilePage() {
     </div>
   );
 }
+

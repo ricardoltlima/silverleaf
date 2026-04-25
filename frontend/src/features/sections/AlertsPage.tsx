@@ -81,13 +81,13 @@ export function AlertsPage() {
     const onSeenChanged = () => setRefreshVersion((current) => current + 1);
     const onPrefsChanged = () => setRefreshVersion((current) => current + 1);
     const onViolationsSeenChanged = () => setRefreshVersion((current) => current + 1);
-    window.addEventListener("silverleaf-group-seen-changed", onSeenChanged);
-    window.addEventListener("silverleaf-group-prefs-changed", onPrefsChanged);
-    window.addEventListener("silverleaf-violations-seen-changed", onViolationsSeenChanged);
+    window.addEventListener("app-group-seen-changed", onSeenChanged);
+    window.addEventListener("app-group-prefs-changed", onPrefsChanged);
+    window.addEventListener("app-violations-seen-changed", onViolationsSeenChanged);
     return () => {
-      window.removeEventListener("silverleaf-group-seen-changed", onSeenChanged);
-      window.removeEventListener("silverleaf-group-prefs-changed", onPrefsChanged);
-      window.removeEventListener("silverleaf-violations-seen-changed", onViolationsSeenChanged);
+      window.removeEventListener("app-group-seen-changed", onSeenChanged);
+      window.removeEventListener("app-group-prefs-changed", onPrefsChanged);
+      window.removeEventListener("app-violations-seen-changed", onViolationsSeenChanged);
     };
   }, []);
 
@@ -520,3 +520,4 @@ export function AlertsPage() {
     </div>
   );
 }
+

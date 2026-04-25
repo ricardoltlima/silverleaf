@@ -2,6 +2,7 @@ import { FormEvent, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createNews, deleteNews, fetchNews, updateNews } from "@/features/board/boardApi";
 import { uploadFeedMedia } from "@/features/feed/feedApi";
+import { useCommunityConfig } from "@/hooks/useCommunityConfig";
 import { fetchCurrentUser } from "@/features/users/currentUserApi";
 import { canManageCommunity } from "@/features/users/roleUtils";
 
@@ -12,6 +13,7 @@ function isVideoUrl(url: string): boolean {
 
 export function BoardNewsPage() {
   const queryClient = useQueryClient();
+  const communityConfigQuery = useCommunityConfig();
   const meQuery = useQuery({ queryKey: ["me"], queryFn: fetchCurrentUser });
   const isAdmin = canManageCommunity(meQuery.data);
   const newsQuery = useQuery({ queryKey: ["board", "news"], queryFn: fetchNews });
@@ -60,6 +62,7 @@ export function BoardNewsPage() {
     () => [...(newsQuery.data ?? [])].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
     [newsQuery.data]
   );
+  const communityName = communityConfigQuery.data?.name || "Community";
 
   function resetForm() {
     setTitle("");
@@ -102,7 +105,7 @@ export function BoardNewsPage() {
 
       <section className="card p-4">
         <div className="mb-2 inline-flex rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-800">Board</div>
-        <h2 className="text-xl font-semibold text-slate-900">Silverleaf News</h2>
+        <h2 className="text-xl font-semibold text-slate-900">{communityName} News</h2>
         <p className="mt-1 text-sm text-slate-600">Publish official community news to the right rail.</p>
       </section>
 
@@ -244,3 +247,4 @@ export function BoardNewsPage() {
     </div>
   );
 }
+

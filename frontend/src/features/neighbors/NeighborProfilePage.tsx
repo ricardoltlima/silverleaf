@@ -56,7 +56,7 @@ export function NeighborProfilePage() {
           <button
             type="button"
             onClick={() =>
-              window.dispatchEvent(new CustomEvent("silverleaf-open-messages", { detail: profile.id }))
+              window.dispatchEvent(new CustomEvent("app-open-messages", { detail: profile.id }))
             }
             className="rounded-xl bg-leaf-600 px-4 py-3 text-sm font-medium text-white hover:bg-leaf-700"
           >
@@ -122,3 +122,4 @@ export function NeighborProfilePage() {
     </div>
   );
 }
+

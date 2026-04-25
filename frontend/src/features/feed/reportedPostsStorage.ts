@@ -1,5 +1,5 @@
-const REPORTED_POSTS_KEY_PREFIX = "silverleaf-reported-posts";
-const REPORTED_COMMENTS_KEY_PREFIX = "silverleaf-reported-comments";
+const REPORTED_POSTS_KEY_PREFIX = "app-reported-posts";
+const REPORTED_COMMENTS_KEY_PREFIX = "app-reported-comments";
 
 function storageKey(userId: number | undefined, communityId: number | null | undefined) {
   return `${REPORTED_POSTS_KEY_PREFIX}:${userId ?? "guest"}:${communityId ?? "none"}`;
@@ -72,3 +72,4 @@ export function markCommentReported(
   }
   window.localStorage.setItem(commentStorageKey(userId, communityId), JSON.stringify([...current, commentId]));
 }
+

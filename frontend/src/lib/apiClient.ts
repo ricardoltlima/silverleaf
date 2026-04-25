@@ -46,13 +46,28 @@ async function refreshAccessToken(): Promise<string | null> {
   }
   if (!refreshInFlight) {
     refreshInFlight = (async () => {
-      const response = await fetch("/api/v1/auth/refresh", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ refreshToken })
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      let response: Response;
+      try {
+        try {
+          response = await fetch("/api/v1/auth/refresh", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ refreshToken }),
+            signal: controller.signal
+          });
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") {
+            throw new Error("Request timed out. Please check your connection.");
+          }
+          throw error;
+        }
+      } finally {
+        clearTimeout(timeoutId);
+      }
       if (!response.ok) {
         clearTokens();
         return null;
@@ -95,16 +110,32 @@ async function performRequest(path: string, options: ApiOptions, tokenOverride?:
     }
   }
 
-  return fetch(path, {
-    method,
-    headers: requestHeaders,
-    body:
-      body === undefined
-        ? undefined
-        : body instanceof FormData
-          ? body
-          : JSON.stringify(body)
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    try {
+      const response = await fetch(path, {
+        method,
+        headers: requestHeaders,
+        body:
+          body === undefined
+            ? undefined
+            : body instanceof FormData
+              ? body
+              : JSON.stringify(body),
+        signal: controller.signal
+      });
+      return response;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw new Error("Request timed out. Please check your connection.");
+      }
+      throw error;
+    }
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 export async function apiClient<T>(path: string, options: ApiOptions = {}): Promise<T> {

@@ -285,6 +285,7 @@ public class GroupService {
     }
 
     private GroupResponse toGroupResponse(ResidentGroupEntity group, Long userId) {
+        UserEntity owner = group.getOwner();
         long count = residentGroupMemberRepository.countMembersByGroupIds(List.of(group.getId())).stream()
                 .findFirst()
                 .map(GroupMemberCountProjection::getTotalCount)
@@ -299,12 +300,12 @@ public class GroupService {
                 group.getName(),
                 group.getDescription(),
                 group.getVisibility().name(),
-                group.getOwner().getId(),
-                group.getOwner().getFullName(),
+                owner == null ? null : owner.getId(),
+                owner == null ? "Unknown" : owner.getFullName(),
                 subscribed,
                 requestPending,
                 viewerRequest != null ? viewerRequest.getStatus().name() : null,
-                group.getOwner().getId().equals(userId),
+                owner != null && owner.getId().equals(userId),
                 residentGroupJoinRequestRepository.countByGroupIdAndStatus(group.getId(), JoinRequestStatus.PENDING),
                 count
         );

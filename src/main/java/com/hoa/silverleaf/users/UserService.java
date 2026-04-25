@@ -88,7 +88,7 @@ public class UserService {
 
     public MeResponse me() {
         AppUserPrincipal principal = requirePrincipal();
-        log.debug("Authenticated principal resolved. userId={}, email={}", principal.getId(), principal.getUsername());
+        log.debug("Authenticated principal resolved. userId={}", principal.getId());
         UserEntity user = userRepository.findById(principal.getId())
                 .orElseThrow(() -> new NotFoundException("User not found"));
         return new MeResponse(
@@ -212,7 +212,7 @@ public class UserService {
         communityAccessService.requireCurrentCommunityAdmin(principal);
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
         if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
-            log.warn("Resident creation rejected because email already exists: {}", normalizedEmail);
+            log.warn("Resident creation rejected because email already exists: masked");
             throw new IllegalArgumentException("Email already registered");
         }
         UserRole requestedRole = assignableRoleFor(principal, request.role());
@@ -228,7 +228,7 @@ public class UserService {
         var community = communityAccessService.requireCommunityForPrincipal(principal);
         residentCommunityMembershipService.activateMembership(savedUser, community);
         residentCommunityMembershipService.syncCommunityAdmin(savedUser, community, communityAdmin);
-        log.info("Resident created successfully. userId={}, email={}", savedUser.getId(), savedUser.getEmail());
+        log.info("Resident created successfully. userId={}", savedUser.getId());
         return toResidentResponse(savedUser, community.getId());
     }
 
@@ -237,7 +237,7 @@ public class UserService {
         communityAccessService.requireCurrentCommunityAdmin(principal);
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
         if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
-            log.warn("Resident invitation rejected because email already exists: {}", normalizedEmail);
+            log.warn("Resident invitation rejected because email already exists: masked");
             throw new IllegalArgumentException("Email already registered");
         }
         UserRole requestedRole = assignableRoleFor(principal, request.role());
@@ -311,7 +311,7 @@ public class UserService {
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
         if (!resident.getEmail().equalsIgnoreCase(normalizedEmail)
                 && userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
-            log.warn("Resident update rejected due to duplicated email={} for userId={}", normalizedEmail, id);
+            log.warn("Resident update rejected due to duplicated email for userId={}", id);
             throw new IllegalArgumentException("Email already registered");
         }
 
@@ -335,7 +335,7 @@ public class UserService {
                 communityAccessService.requireCommunityForPrincipal(principal),
                 communityAdmin
         );
-        log.info("Resident updated successfully. userId={}, email={}", savedResident.getId(), savedResident.getEmail());
+        log.info("Resident updated successfully. userId={}", savedResident.getId());
         return toResidentResponse(savedResident, communityAccessService.requireCommunityIdForPrincipal(principal));
     }
 
@@ -350,7 +350,7 @@ public class UserService {
         }
         resident.setEnabled(false);
         UserEntity savedResident = userRepository.save(resident);
-        log.info("Resident deactivated. userId={}, email={}", savedResident.getId(), savedResident.getEmail());
+        log.info("Resident deactivated. userId={}", savedResident.getId());
         return toResidentResponse(savedResident, communityAccessService.requireCommunityIdForPrincipal(principal));
     }
 
@@ -365,7 +365,7 @@ public class UserService {
         }
         resident.setEnabled(true);
         UserEntity savedResident = userRepository.save(resident);
-        log.info("Resident activated. userId={}, email={}", savedResident.getId(), savedResident.getEmail());
+        log.info("Resident activated. userId={}", savedResident.getId());
         return toResidentResponse(savedResident, communityAccessService.requireCommunityIdForPrincipal(principal));
     }
 
@@ -401,7 +401,7 @@ public class UserService {
 
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
         if (!user.getEmail().equalsIgnoreCase(normalizedEmail) && userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
-            log.warn("Self profile update rejected due to duplicated email={} userId={}", normalizedEmail, user.getId());
+            log.warn("Self profile update rejected due to duplicated email userId={}", user.getId());
             throw new IllegalArgumentException("Email already registered");
         }
 
@@ -442,7 +442,7 @@ public class UserService {
         user.setPhotoUrl(storedPhotoUrl);
         UserEntity saved = userRepository.save(user);
         profilePhotoStorageService.deleteIfLocal(oldPhotoUrl);
-        log.info("Self-service profile photo updated userId={} photoUrl={}", saved.getId(), saved.getPhotoUrl());
+        log.info("Self-service profile photo updated userId={}", saved.getId());
         return new MeResponse(
                 saved.getId(),
                 saved.getEmail(),
@@ -462,7 +462,7 @@ public class UserService {
         return houseResidentRepository.findFirstActiveByResidentIdOrderByMovedInAtDescIdDesc(principal.getId())
                 .map(me -> toHouseholdResponse(me.getHouse()))
                 .orElseGet(() -> {
-                    log.debug("No household linked for user email={}, returning empty household response", principal.getUsername());
+                    log.debug("No household linked for userId={}, returning empty household response", principal.getId());
                     return new HouseholdResponse(null, null, com.hoa.silverleaf.houses.HouseStatus.UNKNOWN, List.of());
                 });
     }
@@ -476,7 +476,7 @@ public class UserService {
         HouseEntity house = me.getHouse();
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
         if (houseResidentRepository.existsByHouseIdAndEmailIgnoreCase(house.getId(), normalizedEmail)) {
-            log.warn("Household member add blocked due to duplicate houseId={} email={}", house.getId(), normalizedEmail);
+            log.warn("Household member add blocked due to duplicate houseId={} email=masked", house.getId());
             throw new IllegalArgumentException("Resident already added to this household");
         }
 
@@ -487,7 +487,7 @@ public class UserService {
         resident.setMovedInAt(Instant.now());
         houseResidentRepository.save(resident);
         residentCommunityMembershipService.activateMembership(resident.getResident(), house.getCommunity());
-        log.info("Household member added houseId={} email={}", house.getId(), normalizedEmail);
+        log.info("Household member added houseId={} residentUserId={}", house.getId(), resident.getResident().getId());
         return toHouseholdResponse(house);
     }
 
@@ -496,7 +496,7 @@ public class UserService {
             if (!existingUser.getFullName().equals(fullName.trim())) {
                 existingUser.setFullName(fullName.trim());
                 existingUser = userRepository.save(existingUser);
-                log.info("Synced app_user fullName from household member email={}", normalizedEmail);
+                log.info("Synced household member profile userId={}", existingUser.getId());
             }
             return existingUser;
         }).orElseGet(() -> {
@@ -508,7 +508,7 @@ public class UserService {
             user.setRole(UserRole.RESIDENT);
             user.setEnabled(true);
             UserEntity saved = userRepository.save(user);
-            log.info("Created app_user for household member email={}", normalizedEmail);
+            log.info("Created app_user for household member userId={}", saved.getId());
             return saved;
         });
     }

@@ -626,16 +626,28 @@ public class FeedService {
         }
         List<FeedPostCommentEntity> comments = feedPostCommentRepository.findByPostIdInOrderByCreatedAtAscIdAsc(postIds);
         List<Long> commentIds = comments.stream().map(FeedPostCommentEntity::getId).toList();
-        Map<Long, EnumMap<FeedReactionType, Long>> reactionCountsByComment = loadCommentReactionCountsByIds(commentIds);
-        Map<Long, FeedReactionType> viewerReactionByComment = loadViewerCommentReactionByIds(commentIds, viewerUserId);
+        Map<Long, List<FeedCommentReactionEntity>> reactionsByCommentId = new HashMap<>();
+        if (!commentIds.isEmpty()) {
+            feedCommentReactionRepository.findByCommentIdIn(commentIds).forEach(reaction ->
+                    reactionsByCommentId.computeIfAbsent(reaction.getComment().getId(), ignored -> new ArrayList<>())
+                            .add(reaction)
+            );
+        }
 
         Map<Long, List<FeedCommentResponse>> grouped = new HashMap<>();
-        comments.forEach(comment -> grouped.computeIfAbsent(comment.getPost().getId(), ignored -> new ArrayList<>())
-                .add(toCommentResponse(
-                        comment,
-                        reactionCountsByComment.getOrDefault(comment.getId(), new EnumMap<>(FeedReactionType.class)),
-                        viewerReactionByComment.get(comment.getId())
-                )));
+        comments.forEach(comment -> {
+            List<FeedCommentReactionEntity> reactions = reactionsByCommentId.getOrDefault(comment.getId(), List.of());
+            EnumMap<FeedReactionType, Long> reactionCounts = new EnumMap<>(FeedReactionType.class);
+            FeedReactionType viewerReaction = null;
+            for (FeedCommentReactionEntity reaction : reactions) {
+                reactionCounts.merge(reaction.getReactionType(), 1L, Long::sum);
+                if (viewerUserId != null && reaction.getUser() != null && viewerUserId.equals(reaction.getUser().getId())) {
+                    viewerReaction = reaction.getReactionType();
+                }
+            }
+            grouped.computeIfAbsent(comment.getPost().getId(), ignored -> new ArrayList<>())
+                    .add(toCommentResponse(comment, reactionCounts, viewerReaction));
+        });
         return grouped;
     }
 
@@ -644,11 +656,12 @@ public class FeedService {
             EnumMap<FeedReactionType, Long> reactionCounts,
             FeedReactionType viewerReaction
     ) {
+        UserEntity author = comment.getAuthor();
         return new FeedCommentResponse(
                 comment.getId(),
-                comment.getAuthor().getId(),
-                comment.getAuthor().getFullName(),
-                comment.getAuthor().getPhotoUrl(),
+                author == null ? null : author.getId(),
+                author == null ? "Deleted User" : author.getFullName(),
+                author == null ? null : author.getPhotoUrl(),
                 comment.getBodyText(),
                 comment.getCreatedAt(),
                 totalReactions(reactionCounts),
@@ -759,7 +772,7 @@ public class FeedService {
         return response;
     }
 
-    private CursorParts parseCursor(String cursor) {
+    public static CursorParts parseCursor(String cursor) {
         if (cursor == null || cursor.isBlank()) {
             return new CursorParts(null, null);
         }
@@ -777,11 +790,11 @@ public class FeedService {
         }
     }
 
-    private String buildCursor(Instant createdAt, Long id) {
+    public static String buildCursor(Instant createdAt, Long id) {
         return createdAt.toEpochMilli() + "_" + id;
     }
 
-    private record CursorParts(Instant createdAt, Long id) {
+    public record CursorParts(Instant createdAt, Long id) {
     }
 
     private static class ReportAccumulator {

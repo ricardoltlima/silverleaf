@@ -35,7 +35,7 @@ public class CommunityAccessService {
                 .or(() -> houseResidentRepository.findFirstActiveByResidentIdOrderByMovedInAtDescIdDesc(userId)
                 .map(membership -> membership.getHouse().getCommunity())
                 )
-                .orElseGet(communityService::requireDefaultCommunity);
+                .orElseGet(communityService::requireFirstActiveCommunity);
     }
 
     @Transactional(readOnly = true)

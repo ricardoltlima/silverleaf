@@ -297,7 +297,7 @@ export function GarageSalesPage() {
                 <button
                   type="button"
                   onClick={() =>
-                    window.dispatchEvent(new CustomEvent("silverleaf-open-messages", { detail: selectedItem.sellerUserId }))
+                    window.dispatchEvent(new CustomEvent("app-open-messages", { detail: selectedItem.sellerUserId }))
                   }
                   className="shrink-0"
                 >
@@ -311,7 +311,7 @@ export function GarageSalesPage() {
                   <button
                     type="button"
                     onClick={() =>
-                      window.dispatchEvent(new CustomEvent("silverleaf-open-messages", { detail: selectedItem.sellerUserId }))
+                      window.dispatchEvent(new CustomEvent("app-open-messages", { detail: selectedItem.sellerUserId }))
                     }
                     className="feed-author-name text-left text-slate-900 transition hover:text-leaf-700"
                   >
@@ -573,3 +573,4 @@ export function GarageSalesPage() {
     </div>
   );
 }
+

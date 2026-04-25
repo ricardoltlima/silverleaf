@@ -1,4 +1,4 @@
-const LAST_SEEN_REPORTS_AT_KEY = "silverleaf-last-seen-reports-at";
+const LAST_SEEN_REPORTS_AT_KEY = "app-last-seen-reports-at";
 
 export function getLastSeenReportsAt(): string | null {
   if (typeof window === "undefined") {
@@ -12,5 +12,6 @@ export function markReportsSeen(timestamp: string = new Date().toISOString()) {
     return;
   }
   window.localStorage.setItem(LAST_SEEN_REPORTS_AT_KEY, timestamp);
-  window.dispatchEvent(new CustomEvent("silverleaf-reports-seen-changed"));
+  window.dispatchEvent(new CustomEvent("app-reports-seen-changed"));
 }
+

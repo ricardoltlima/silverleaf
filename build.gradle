@@ -41,6 +41,8 @@ dependencies {
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.8'
     // Google token validation client used in onboarding.
     implementation 'com.google.api-client:google-api-client:2.7.0'
+    // Lightweight in-memory token bucket rate limiting.
+    implementation 'com.bucket4j:bucket4j-core:8.10.1'
     // JWT API (token build/parse contracts).
     implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
     // JWT runtime implementation.

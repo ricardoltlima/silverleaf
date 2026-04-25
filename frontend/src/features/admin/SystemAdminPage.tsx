@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { CommunitiesPanel } from "@/features/admin/CommunitiesPanel";
 import { fetchCurrentUser } from "@/features/users/currentUserApi";
 import { isSystemAdmin } from "@/features/users/roleUtils";
 import { fetchHousesForHoaDesk, fetchManagedResidents } from "@/features/hoa/hoaApi";
@@ -115,7 +116,7 @@ export function SystemAdminPage() {
               <p className="mt-2 text-2xl font-semibold text-slate-900">
                 {stats.occupiedHouses} / {stats.houses}
               </p>
-              <p className="mt-1 text-sm text-slate-600">Occupied houses in the current Silverleaf community.</p>
+              <p className="mt-1 text-sm text-slate-600">Occupied houses in the current community.</p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Role distribution</p>
@@ -179,6 +180,7 @@ export function SystemAdminPage() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-3">
+        <CommunitiesPanel />
         <article className="card p-4">
           <h3 className="text-base font-semibold text-slate-900">Communities</h3>
           <p className="mt-2 text-sm text-slate-600">
@@ -202,3 +204,4 @@ export function SystemAdminPage() {
     </div>
   );
 }
+

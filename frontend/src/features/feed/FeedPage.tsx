@@ -242,9 +242,9 @@ export function FeedPage({
       const customEvent = event as CustomEvent<string>;
       setCurrentUserPhoto(customEvent.detail || null);
     };
-    window.addEventListener("silverleaf-profile-photo-changed", onProfilePhotoChanged);
+    window.addEventListener("app-profile-photo-changed", onProfilePhotoChanged);
     return () => {
-      window.removeEventListener("silverleaf-profile-photo-changed", onProfilePhotoChanged);
+      window.removeEventListener("app-profile-photo-changed", onProfilePhotoChanged);
     };
   }, []);
 
@@ -568,7 +568,7 @@ export function FeedPage({
               <button
                 type="button"
                 onClick={() =>
-                  window.dispatchEvent(new CustomEvent("silverleaf-open-messages", { detail: post.authorUserId }))
+                  window.dispatchEvent(new CustomEvent("app-open-messages", { detail: post.authorUserId }))
                 }
                 className="feed-author-name text-left text-slate-900 transition hover:text-leaf-700"
               >
@@ -639,7 +639,7 @@ export function FeedPage({
               <button
                 type="button"
                 onClick={() =>
-                  window.dispatchEvent(new CustomEvent("silverleaf-open-messages", { detail: post.authorUserId }))
+                  window.dispatchEvent(new CustomEvent("app-open-messages", { detail: post.authorUserId }))
                 }
                 className="feed-author-name text-left text-slate-900 transition hover:text-leaf-700"
               >
@@ -1273,4 +1273,5 @@ function activeReactionClass(icon: "heart" | "thumb-up" | "thumb-down") {
   }
   return "border-amber-300 bg-gradient-to-r from-amber-100 to-orange-100 text-amber-800";
 }
+
 

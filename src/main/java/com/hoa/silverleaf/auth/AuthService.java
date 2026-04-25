@@ -70,9 +70,9 @@ public class AuthService {
     @Transactional
     public AuthResponse register(RegisterRequest request) {
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
-        log.debug("Attempting registration for email={}", normalizedEmail);
+        log.debug("Attempting registration");
         if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
-            log.warn("Registration rejected because email already exists: {}", normalizedEmail);
+            log.warn("Registration rejected because email already exists: masked");
             throw new IllegalArgumentException("Email already registered");
         }
 
@@ -83,7 +83,7 @@ public class AuthService {
         user.setRole(UserRole.RESIDENT);
         UserEntity savedUser = userRepository.save(user);
         residentCommunityMembershipService.ensureDefaultMembership(savedUser);
-        log.info("User registered successfully. userId={}, email={}", savedUser.getId(), savedUser.getEmail());
+        log.info("User registered successfully. userId={}", savedUser.getId());
 
         return issueTokens(savedUser, communityAccessService.requireCommunityForUser(savedUser.getId()));
     }
@@ -92,14 +92,14 @@ public class AuthService {
     public AuthResponse login(AuthRequest request) {
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
         // Authentication is delegated to Spring Security so account lock/disable rules stay centralized.
-        log.debug("Authenticating user email={}", normalizedEmail);
+        log.debug("Authenticating user");
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(normalizedEmail, request.password())
         );
 
         UserEntity user = userRepository.findByEmailIgnoreCase(normalizedEmail)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid credentials"));
-        log.info("User authenticated successfully. userId={}, email={}", user.getId(), user.getEmail());
+        log.info("User authenticated successfully. userId={}", user.getId());
 
         return issueTokens(user, communityAccessService.requireCommunityForUser(user.getId()));
     }

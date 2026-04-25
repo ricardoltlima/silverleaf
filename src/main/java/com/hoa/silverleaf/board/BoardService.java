@@ -6,11 +6,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hoa.silverleaf.board.dto.*;
 import com.hoa.silverleaf.common.NotFoundException;
 import com.hoa.silverleaf.community.CommunityAccessService;
+import com.hoa.silverleaf.feed.FeedService;
 import com.hoa.silverleaf.security.AppUserPrincipal;
 import com.hoa.silverleaf.users.UserEntity;
 import com.hoa.silverleaf.users.UserRepository;
 import com.hoa.silverleaf.users.UserRole;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,12 +53,27 @@ public class BoardService {
     }
 
     @Transactional(readOnly = true)
-    public List<NewsResponse> listNews(AppUserPrincipal principal) {
-        return newsRepository.findAllByCommunityIdOrderByCreatedAtDescIdDesc(
-                        communityAccessService.requireCommunityIdForPrincipal(principal)
-                ).stream()
+    public NewsPageResponse listNews(AppUserPrincipal principal, String cursor, int limit) {
+        int pageSize = Math.max(1, Math.min(limit, 50));
+        FeedService.CursorParts cursorParts = FeedService.parseCursor(cursor);
+        Long communityId = communityAccessService.requireCommunityIdForPrincipal(principal);
+        List<NewsEntity> loadedItems = cursorParts.createdAt() == null || cursorParts.id() == null
+                ? newsRepository.findAllByCommunityIdOrderByCreatedAtDescIdDesc(communityId, PageRequest.of(0, pageSize + 1))
+                : newsRepository.findAllByCommunityIdAfterCursorOrderByCreatedAtDescIdDesc(
+                        communityId,
+                        cursorParts.createdAt(),
+                        cursorParts.id(),
+                        PageRequest.of(0, pageSize + 1)
+                );
+        boolean hasMore = loadedItems.size() > pageSize;
+        List<NewsEntity> items = hasMore ? loadedItems.subList(0, pageSize) : loadedItems;
+        List<NewsResponse> responses = items.stream()
                 .map(this::toNewsResponse)
                 .toList();
+        String nextCursor = hasMore && !responses.isEmpty()
+                ? FeedService.buildCursor(responses.get(responses.size() - 1).createdAt(), responses.get(responses.size() - 1).id())
+                : null;
+        return new NewsPageResponse(responses, nextCursor);
     }
 
     @Transactional
@@ -99,12 +117,27 @@ public class BoardService {
     }
 
     @Transactional(readOnly = true)
-    public List<BroadcastResponse> listBroadcasts(AppUserPrincipal principal) {
-        return broadcastRepository.findAllByCommunityIdOrderByCreatedAtDescIdDesc(
-                        communityAccessService.requireCommunityIdForPrincipal(principal)
-                ).stream()
+    public BroadcastPageResponse listBroadcasts(AppUserPrincipal principal, String cursor, int limit) {
+        int pageSize = Math.max(1, Math.min(limit, 50));
+        FeedService.CursorParts cursorParts = FeedService.parseCursor(cursor);
+        Long communityId = communityAccessService.requireCommunityIdForPrincipal(principal);
+        List<BroadcastEntity> loadedItems = cursorParts.createdAt() == null || cursorParts.id() == null
+                ? broadcastRepository.findAllByCommunityIdOrderByCreatedAtDescIdDesc(communityId, PageRequest.of(0, pageSize + 1))
+                : broadcastRepository.findAllByCommunityIdAfterCursorOrderByCreatedAtDescIdDesc(
+                        communityId,
+                        cursorParts.createdAt(),
+                        cursorParts.id(),
+                        PageRequest.of(0, pageSize + 1)
+                );
+        boolean hasMore = loadedItems.size() > pageSize;
+        List<BroadcastEntity> items = hasMore ? loadedItems.subList(0, pageSize) : loadedItems;
+        List<BroadcastResponse> responses = items.stream()
                 .map(b -> new BroadcastResponse(b.getId(), b.getTitle(), b.getBodyText(), b.getAuthor().getFullName(), b.getCreatedAt()))
                 .toList();
+        String nextCursor = hasMore && !responses.isEmpty()
+                ? FeedService.buildCursor(responses.get(responses.size() - 1).createdAt(), responses.get(responses.size() - 1).id())
+                : null;
+        return new BroadcastPageResponse(responses, nextCursor);
     }
 
     @Transactional
@@ -177,7 +210,11 @@ public class BoardService {
             return created;
         });
         vote.setOptionIndex(request.optionIndex());
-        pollVoteRepository.save(vote);
+        try {
+            pollVoteRepository.save(vote);
+        } catch (DataIntegrityViolationException ex) {
+            throw new IllegalStateException("You have already voted on this poll");
+        }
         List<PollVoteEntity> votes = pollVoteRepository.findByPollIdIn(List.of(pollId));
         return toPollResponse(poll, votes, principal.getId());
     }
@@ -208,13 +245,28 @@ public class BoardService {
     }
 
     @Transactional(readOnly = true)
-    public List<ViolationResponse> listAllViolations(AppUserPrincipal principal) {
+    public ViolationPageResponse listAllViolations(AppUserPrincipal principal, String cursor, int limit) {
         communityAccessService.requireCurrentCommunityAdmin(principal);
-        return violationReportRepository.findAllByCommunityIdOrderByCreatedAtDescIdDesc(
-                        communityAccessService.requireCommunityIdForPrincipal(principal)
-                ).stream()
+        int pageSize = Math.max(1, Math.min(limit, 50));
+        FeedService.CursorParts cursorParts = FeedService.parseCursor(cursor);
+        Long communityId = communityAccessService.requireCommunityIdForPrincipal(principal);
+        List<ViolationReportEntity> loadedItems = cursorParts.createdAt() == null || cursorParts.id() == null
+                ? violationReportRepository.findAllByCommunityIdOrderByCreatedAtDescIdDesc(communityId, PageRequest.of(0, pageSize + 1))
+                : violationReportRepository.findAllByCommunityIdAfterCursorOrderByCreatedAtDescIdDesc(
+                        communityId,
+                        cursorParts.createdAt(),
+                        cursorParts.id(),
+                        PageRequest.of(0, pageSize + 1)
+                );
+        boolean hasMore = loadedItems.size() > pageSize;
+        List<ViolationReportEntity> items = hasMore ? loadedItems.subList(0, pageSize) : loadedItems;
+        List<ViolationResponse> responses = items.stream()
                 .map(this::toViolationResponse)
                 .toList();
+        String nextCursor = hasMore && !responses.isEmpty()
+                ? FeedService.buildCursor(responses.get(responses.size() - 1).createdAt(), responses.get(responses.size() - 1).id())
+                : null;
+        return new ViolationPageResponse(responses, nextCursor);
     }
 
     @Transactional

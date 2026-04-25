@@ -39,8 +39,13 @@ export type ViolationItem = {
   createdAt: string;
 };
 
+type PageResponse<T> = {
+  items: T[];
+  nextCursor: string | null;
+};
+
 export function fetchNews() {
-  return apiClient<NewsItem[]>("/api/v1/news");
+  return apiClient<PageResponse<NewsItem>>("/api/v1/news").then((response) => response.items);
 }
 
 export function createNews(payload: { title: string; body: string; mediaUrls: string[] }) {
@@ -64,7 +69,7 @@ export function deleteNews(newsId: number) {
 }
 
 export function fetchBroadcasts() {
-  return apiClient<BroadcastItem[]>("/api/v1/broadcasts");
+  return apiClient<PageResponse<BroadcastItem>>("/api/v1/broadcasts").then((response) => response.items);
 }
 
 export function createBroadcast(payload: { title: string; body: string }) {
@@ -104,7 +109,7 @@ export function createViolation(payload: { description: string; photoUrl: string
 }
 
 export function fetchAllViolations() {
-  return apiClient<ViolationItem[]>("/api/v1/board/violations");
+  return apiClient<PageResponse<ViolationItem>>("/api/v1/board/violations").then((response) => response.items);
 }
 
 export function updateViolationStatus(violationId: number, status: ViolationItem["status"]) {

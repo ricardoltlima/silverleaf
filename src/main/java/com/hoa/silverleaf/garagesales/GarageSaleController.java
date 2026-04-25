@@ -1,6 +1,7 @@
 package com.hoa.silverleaf.garagesales;
 
 import com.hoa.silverleaf.garagesales.dto.CreateGarageSaleItemRequest;
+import com.hoa.silverleaf.garagesales.dto.GarageSaleItemPageResponse;
 import com.hoa.silverleaf.garagesales.dto.GarageSaleItemResponse;
 import com.hoa.silverleaf.garagesales.dto.UpdateGarageSaleItemRequest;
 import com.hoa.silverleaf.security.AppUserPrincipal;
@@ -14,11 +15,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PathVariable;
-
-import java.util.List;
 
 @Slf4j
 @RestController
@@ -32,9 +32,13 @@ public class GarageSaleController {
     }
 
     @GetMapping
-    public List<GarageSaleItemResponse> list(@AuthenticationPrincipal AppUserPrincipal principal) {
+    public GarageSaleItemPageResponse list(
+            @AuthenticationPrincipal AppUserPrincipal principal,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "20") int limit
+    ) {
         log.debug("Garage sale items list requested");
-        return garageSaleService.listItems(principal);
+        return garageSaleService.listItems(principal, cursor, limit);
     }
 
     @PostMapping
